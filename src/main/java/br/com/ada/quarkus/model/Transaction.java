@@ -24,10 +24,10 @@ public class Transaction {
 
     /**
      * Tipo da operação financeira.
-     * Define a lógica de movimentação (DEPÓSITO, SAQUE ou TRANSFERÊNCIA)
+     * Define a lógica de movimentação (DEPOSITO, SAQUE ou TRANSFERENCIA)
      * conforme o Enum {@link TransactionType}.
      */
-    @NotNull(message = "O tipo de transação é obrigatório")
+    @NotNull(message = "O tipo da transação é obrigatório")
     private TransactionType type;
 
     /**
@@ -36,20 +36,18 @@ public class Transaction {
      * evitando erros de arredondamento comuns em tipos de ponto flutuante.
      */
     @NotNull(message = "O valor da transação é obrigatório")
-    @DecimalMin(value = "0.01", message = "O valor da transação deve ser de no mínimo R$ 0,01")
+    @DecimalMin(value = "0.01", message = "O valor da transação deve ser no mínimo 0,01")
     private BigDecimal amount;
 
     /**
      * Carimbo de data e hora da transação.
      * Registra o momento em que a transação foi processada pelo servidor.
      */
-    @NotNull(message = "O registro de data e hora é obrigatório")
+    @NotNull(message = "A data e hora da transação é obrigatória")
     private LocalDateTime dateTime;
 
     /**
-     * Identificador da conta que fornece os fundos.
-     * Em operações de DEPÓSITO, este campo pode representar um caixa eletrônico
-     * ou uma conta de sistema.
+     * Identificador da conta de origem da transação.
      */
     @NotNull(message = "A conta de origem é obrigatória")
     private Long sourceAccountId;
@@ -57,7 +55,7 @@ public class Transaction {
     /**
      * Identificador da conta que recebe os fundos.
      * Este campo é opcional em operações de SAQUE, mas obrigatório em
-     * TRANSFERÊNCIAS e DEPÓSITOS.
+     * TRANSFERENCIAS e DEPOSITOS.
      */
     private Long destinationAccountId;
 
@@ -133,7 +131,7 @@ public class Transaction {
         return sourceAccountId;
     }
 
-    /** @param sourceAccountId O novo ID da conta de origem. */
+    /** @param sourceAccountId O novo identificador da conta de origem. */
     public void setSourceAccountId(Long sourceAccountId) {
         this.sourceAccountId = sourceAccountId;
     }

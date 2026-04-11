@@ -4,6 +4,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.util.Objects;
 
 /**
@@ -22,21 +23,28 @@ public class Customer {
     private Long id;
 
     /** Nome completo do cliente. Deve conter entre 3 e 100 caracteres. */
-    @NotBlank(message = "Name is required")
-    @Size(min = 3, max = 100, message = "Name must be between 3 and 100 characters")
+    @NotBlank(message = "O nome do cliente é obrigatório")
+    @Size(min = 3, max = 100, message = "O nome do cliente deve conter entre 3 e 100 caracteres")
     private String name;
 
-    /** * Cadastro de Pessoa Física (CPF).
+    /** Cadastro de Pessoa Física (CPF).
      * Deve conter exatamente 11 dígitos numéricos.
      */
-    @NotBlank(message = "Tax ID is required")
-    @Pattern(regexp = "\\d{11}", message = "Tax ID must be exactly 11 numeric digits (CPF format)")
-    private String taxId;
+    @NotBlank(message = "O CPF é obrigatório")
+    @Pattern(regexp = "\\d{11}", message = "O CPF deve conter exatamente 11 dígitos numéricos")
+    private String cpf;
 
     /** Endereço de e-mail eletrônico para contato e notificações. */
-    @NotBlank(message = "Email is required")
-    @Email(message = "Invalid email format")
+    @NotBlank(message = "O email é obrigatório")
+    @Email(message = "O email informado é inválido")
     private String email;
+
+    /** Senha para login no sistema. */
+    @NotBlank(message = "A senha é obrigatória")
+    @Size(min = 6, message = "A senha deve conter pelo menos 6 caracteres")
+    @JsonIgnore
+    private String password;
+
 
     /**
      * Construtor padrão (sem argumentos).
@@ -50,14 +58,17 @@ public class Customer {
      *
      * @param id    O identificador único.
      * @param name  O nome completo do cliente.
-     * @param taxId O documento de identificação (CPF).
+     * @param cpf   O documento de identificação (CPF).
      * @param email O endereço de e-mail.
+     * @param password A senha para login.
+     *
      */
-    public Customer(Long id, String name, String taxId, String email) {
+    public Customer(Long id, String name, String cpf, String email, String password) {
         this.id = id;
         this.name = name;
-        this.taxId = taxId;
+        this.cpf = cpf;
         this.email = email;
+        this.password = password;
     }
 
     /** @return O ID do cliente. */
@@ -81,13 +92,13 @@ public class Customer {
     }
 
     /** @return O CPF do cliente. */
-    public String getTaxId() {
-        return taxId;
+    public String getCpf() {
+        return cpf;
     }
 
-    /** @param taxId O novo CPF a ser definido. */
-    public void setTaxId(String taxId) {
-        this.taxId = taxId;
+    /** @param cpf O novo CPF a ser definido. */
+    public void setCpf(String cpf) {
+        this.cpf = cpf;
     }
 
     /** @return O e-mail do cliente. */
@@ -100,8 +111,19 @@ public class Customer {
         this.email = email;
     }
 
+    /** @return A Senha de login do cliente. */
+    @JsonIgnore
+    public String getPassword() {
+        return password;
+    }
+
+    /** @param password A nova senha de login a ser definida. */
+    public void setPassword(String password) {
+        this.password = password;
+    }
+
     /**
-     * Gera uma representação textual do objeto Customer.
+     * Gera uma representação textual do objeto Customer (Cliente).
      * @return String contendo os dados do cliente.
      */
     @Override
@@ -109,14 +131,14 @@ public class Customer {
         return "Customer{" +
                 "id=" + id +
                 ", name='" + name + '\'' +
-                ", taxId='" + taxId + '\'' +
+                ", cpf='" + cpf + '\'' +
                 ", email='" + email + '\'' +
                 '}';
     }
 
     /**
      * Compara este cliente com outro objeto para verificar igualdade.
-     * A igualdade é baseada no ID e no TaxID (CPF).
+     * A igualdade é baseada no ID e no CPF.
      *
      * @param o Objeto a ser comparado.
      * @return true se forem iguais, false caso contrário.
@@ -127,7 +149,7 @@ public class Customer {
         if (o == null || getClass() != o.getClass()) return false;
         Customer customer = (Customer) o;
         return Objects.equals(id, customer.id) &&
-                Objects.equals(taxId, customer.taxId);
+                Objects.equals(cpf, customer.cpf);
     }
 
     /**
@@ -136,6 +158,6 @@ public class Customer {
      */
     @Override
     public int hashCode() {
-        return Objects.hash(id, taxId);
+        return Objects.hash(id, cpf);
     }
 }

@@ -3,6 +3,8 @@ package br.com.ada.quarkus.model;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+
+import java.math.BigDecimal;
 import java.util.Objects;
 
 /**
@@ -30,17 +32,20 @@ public class Account {
 
     /**
      * Tipo da conta bancária.
-     * Define se a conta é CORRENTE, POUPANÇA ou ELETRÔNICA através do Enum {@link AccountType}.
+     * Define se a conta é CORRENTE, POUPANCA ou ELETRONICA através do Enum {@link AccountType}.
      */
-    @NotNull(message = "O tipo de conta é obrigatório")
+    @NotNull(message = "O tipo da conta é obrigatório")
     private AccountType type;
 
     /**
      * Identificador do cliente (Customer) proprietário desta conta.
      * Representa a chave estrangeira para a entidade Customer.
      */
-    @NotNull(message = "O ID do cliente proprietário é obrigatório")
+    @NotNull(message = "O cliente da conta é obrigatório")
     private Long customerId;
+
+    @NotNull(message = "O saldo da conta é obrigatório")
+    private BigDecimal balance;
 
     /**
      * Construtor padrão (sem argumentos).
@@ -50,7 +55,8 @@ public class Account {
     }
 
     /**
-     * Construtor completo para inicialização de todos os campos da conta.
+     * Construtor para inicialização dos campos principais da conta,
+     * o saldo é inicializado automaticamente com zero.
      *
      * @param id            O identificador único da conta.
      * @param accountNumber O número da conta bancária.
@@ -62,6 +68,7 @@ public class Account {
         this.accountNumber = accountNumber;
         this.type = type;
         this.customerId = customerId;
+        this.balance = BigDecimal.ZERO;
     }
 
     /** @return O identificador único da conta. */
@@ -94,14 +101,24 @@ public class Account {
         this.type = type;
     }
 
-    /** @return O ID do cliente proprietário. */
+    /** @return O Identificador do cliente da conta. */
     public Long getCustomerId() {
         return customerId;
     }
 
-    /** @param customerId O novo ID do cliente proprietário. */
+    /** @param customerId O novo Identificador do cliente da conta. */
     public void setCustomerId(Long customerId) {
         this.customerId = customerId;
+    }
+
+    /** @return O saldo (balance) da conta. */
+    public BigDecimal getBalance() {
+        return balance;
+    }
+
+    /** @param balance O novo saldo da conta. */
+    public void setBalance(BigDecimal balance) {
+        this.balance = balance;
     }
 
     /**
@@ -115,6 +132,7 @@ public class Account {
                 ", accountNumber='" + accountNumber + '\'' +
                 ", type=" + type +
                 ", customerId=" + customerId +
+                ", balance=" + balance +
                 '}';
     }
 

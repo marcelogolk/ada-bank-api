@@ -17,24 +17,25 @@ public enum AccountType {
      * Conta Corrente: Modalidade padrão para movimentações diárias,
      * saques e pagamentos.
      */
-    CHECKING("CORRENTE"),
+    CORRENTE("CORRENTE"),
 
     /**
      * Conta Poupança: Modalidade focada em reserva financeira e rendimentos.
      */
-    SAVINGS("POUPANÇA"),
+    POUPANCA("POUPANCA"),
 
     /**
      * Conta Eletrônica: Modalidade exclusiva para transações digitais
      * e pagamentos online.
      */
-    DIGITAL("ELETRÔNICA");
+    ELETRONICA("ELETRONICA");
 
     private final String value;
 
     /**
-     * Construtor do Enum para associar o nome em português.
-     * @param value Nome do tipo em português.
+     * Construtor do enum para associar o valor textual do tipo de conta.
+     *
+     * @param value O valor do tipo de conta utilizado na serialização JSON.
      */
     AccountType(String value) {
         this.value = value;
@@ -49,16 +50,16 @@ public enum AccountType {
     }
 
     /**
-     * Retorna uma descrição amigável do tipo de conta em inglês.
+     * Retorna uma descrição amigável do tipo de conta em português.
      * Útil para exibir em relatórios ou interfaces de usuário.
      *
      * @return A descrição formatada do tipo de conta.
      */
     public String getDescription() {
         return switch (this) {
-            case CHECKING -> "Conta Corrente";
-            case SAVINGS -> "Conta Poupança";
-            case DIGITAL -> "Conta Eletrônica";
+            case CORRENTE -> "Conta Corrente";
+            case POUPANCA -> "Conta Poupança";
+            case ELETRONICA -> "Conta Eletronica";
         };
     }
 }

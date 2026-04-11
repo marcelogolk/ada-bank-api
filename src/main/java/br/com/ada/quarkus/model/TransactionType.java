@@ -4,18 +4,18 @@ import com.fasterxml.jackson.annotation.JsonValue;
 
 /**
  * Define os tipos de transações financeiras suportadas pelo sistema.
- * * @author Marcelo
+ * @author Marcelo
  */
 public enum TransactionType {
 
     /** Representa a entrada de fundos em uma conta. */
-    DEPOSIT("DEPÓSITO"),
+    DEPOSITO("DEPOSITO"),
 
     /** Representa a retirada de fundos de uma conta. */
-    WITHDRAWAL("SAQUE"),
+    SAQUE("SAQUE"),
 
     /** Representa a movimentação de fundos entre duas contas distintas. */
-    TRANSFER("TRANSFERÊNCIA");
+    TRANSFERENCIA("TRANSFERENCIA");
 
     private final String value;
 
@@ -33,9 +33,9 @@ public enum TransactionType {
      */
     public String getDescription() {
         return switch (this) {
-            case DEPOSIT -> "Depósito em conta";
-            case WITHDRAWAL -> "Saque de numerário";
-            case TRANSFER -> "Transferência entre contas";
+            case DEPOSITO -> "Depósito em conta";
+            case SAQUE -> "Saque de numerário";
+            case TRANSFERENCIA -> "Transferência entre contas";
         };
     }
 }
