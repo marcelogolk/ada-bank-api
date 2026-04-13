@@ -11,56 +11,58 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * Serviço responsável pelas operações de gerenciamento de clientes.
+ *
+ * <p>Centraliza as regras de negócio relacionadas a cadastro, consulta
+ * e atualização de clientes, mantendo os dados em memória.</p>
+ */
 @ApplicationScoped
 public class CustomerService {
 
     /**
-     * Armazena os clientes em memória.
-     * Chave: id do cliente
-     * Valor: objeto Customer
+     * Armazena os clientes em memória, indexados pelo id.
      */
     private final Map<Long, Customer> customers = new ConcurrentHashMap<>();
 
     /**
-     * Gera Identificadores únicos para novos clientes.
+     * Gera identificadores únicos para novos clientes.
      */
     private final AtomicLong sequence = new AtomicLong();
 
     /**
-     * Lista todos os clientes cadastrados.
+     * Lista todos os clientes cadastrados, ordenados por id.
      *
-     * Regra esperada:
-     * - retornar os clientes ordenados
-     * - devolver cópias, não os objetos internos
+     * @return lista de clientes.
      */
-    public List<Customer> list(){
+    public List<Customer> list() {
         return customers.values().stream()
                 .sorted(Comparator.comparing(Customer::getId))
-                .map(this:: copy)
+                .map(this::copy)
                 .toList();
     }
 
     /**
-     * Busca um cliente pelo ID.
+     * Busca um cliente pelo id.
      *
-     * Regra esperada:
-     * - se não existir, lançar NotFoundException
-     * - se existir, devolver cópia
+     * @param id identificador do cliente.
+     * @return cliente encontrado.
+     * @throws NotFoundException quando o cliente não existe.
      */
-    public Customer findById(Long id){
+    public Customer findById(Long id) {
         return copy(getRequiredCustomer(id));
     }
 
     /**
      * Busca um cliente pelo email.
      *
-     * Regra esperada:
-     * - normalizar o email antes da busca
-     * - se não existir, lançar NotFoundException
-     * - se existir, devolver cópia
+     * @param email email do cliente.
+     * @return cliente encontrado.
+     * @throws NotFoundException quando nenhum cliente é encontrado para o email informado.
      */
-    public Customer findByEmail(String email){
+    public Customer findByEmail(String email) {
         String normalizedEmail = normalizeEmail(email);
+
         return customers.values().stream()
                 .filter(customer -> customer.getEmail().equalsIgnoreCase(normalizedEmail))
                 .findFirst()
@@ -71,78 +73,84 @@ public class CustomerService {
     }
 
     /**
-     * Cria um novo cliente.
+     * Cadastra um novo cliente após validar unicidade de CPF e email.
      *
-     * Regra esperada:
-     * - validar CPF único
-     * - validar email único
-     * - gerar ID
-     * - criar um novo objeto Customer com o ID gerado
-     * - armazenar no Map
-     * - devolver cópia
+     * @param customer dados do cliente a ser criado.
+     * @return cliente criado.
+     * @throws BadRequestException quando CPF ou email já estão em uso.
      */
-    public Customer create(Customer customer){
+    public Customer create(Customer customer) {
         validateUniqueCpf(customer.getCpf(), null);
         validateUniqueEmail(customer.getEmail(), null);
+
         long id = sequence.incrementAndGet();
-        Customer newCustumer = new Customer(
+
+        Customer newCustomer = new Customer(
                 id,
                 customer.getName(),
                 customer.getCpf(),
                 normalizeEmail(customer.getEmail()),
                 customer.getPassword()
         );
-        customers.put(id, newCustumer);
-        return copy(newCustumer);
+
+        customers.put(id, newCustomer);
+        return copy(newCustomer);
     }
 
     /**
-     * Atualiza um cliente existente.
+     * Atualiza os dados permitidos de um cliente.
      *
-     * Regra esperada:
-     * - cliente precisa existir
-     * - CPF não pode ser alterado
-     * - email deve continuar único
-     * - nome, email e senha podem ser alterados
-     * - devolver cópia do cliente atualizado
+     * <p>O CPF não pode ser alterado após o cadastro.</p>
+     *
+     * @param id identificador do cliente.
+     * @param name novo nome.
+     * @param email novo email.
+     * @param password nova senha.
+     * @return cliente atualizado.
+     * @throws NotFoundException quando o cliente não existe.
+     * @throws BadRequestException quando o email já está em uso por outro cliente.
      */
-    public Customer update(Long id, Customer customer){
-        Customer existingCustomer =  getRequiredCustomer(id);
+    public Customer update(Long id, String name, String email, String password) {
+        Customer existingCustomer = getRequiredCustomer(id);
 
-        if (!existingCustomer.getCpf().equals(customer.getCpf())){
-            throw new BadRequestException("O CPF não pode ser alterado");
-        }
-        existingCustomer.setName(customer.getName());
-        existingCustomer.setEmail(customer.getEmail());
-        existingCustomer.setPassword(customer.getPassword());
+        validateUniqueEmail(email, id);
+
+        existingCustomer.setName(name);
+        existingCustomer.setEmail(normalizeEmail(email));
+        existingCustomer.setPassword(password);
+
         return copy(existingCustomer);
     }
 
     /**
-     * Busca um cliente por ID e exige que ele exista.
+     * Retorna obrigatoriamente um cliente existente.
      *
-     * Uso:
-     * - evitar repetição de código em findById e update
+     * @param id identificador do cliente.
+     * @return cliente encontrado.
+     * @throws NotFoundException quando o cliente não existe.
      */
     private Customer getRequiredCustomer(Long id) {
         Customer customer = customers.get(id);
+
         if (customer == null) {
             throw new NotFoundException("Cliente não encontrado");
         }
+
         return customer;
     }
 
     /**
      * Valida se o CPF já está em uso por outro cliente.
      *
-     * currentId:
-     * - null no create
-     * - id do cliente atual no update
+     * @param cpf CPF a validar.
+     * @param currentId id do cliente atual em atualização, ou null em criação.
+     * @throws BadRequestException quando o CPF já está cadastrado.
      */
     private void validateUniqueCpf(String cpf, Long currentId) {
         boolean duplicate = customers.values().stream()
-                .anyMatch(customer -> customer.getCpf()
-                        .equals(cpf) && !customer.getId().equals(currentId));
+                .anyMatch(customer -> customer.getCpf().equals(cpf)
+                        && !customer.getId().equals(currentId));
+
         if (duplicate) {
             throw new BadRequestException("Já existe um cliente com o CPF informado");
         }
@@ -151,15 +159,15 @@ public class CustomerService {
     /**
      * Valida se o email já está em uso por outro cliente.
      *
-     * currentId:
-     * - null no create
-     * - id do cliente atual no update
+     * @param email email a validar.
+     * @param currentId id do cliente atual em atualização, ou null em criação.
+     * @throws BadRequestException quando o email já está cadastrado.
      */
-    private void validateUniqueEmail(String email, Long currentId){
+    private void validateUniqueEmail(String email, Long currentId) {
         String normalizedEmail = normalizeEmail(email);
+
         boolean duplicate = customers.values().stream()
-                .anyMatch(customer -> customer.getEmail()
-                        .equalsIgnoreCase(normalizedEmail)
+                .anyMatch(customer -> customer.getEmail().equalsIgnoreCase(normalizedEmail)
                         && !customer.getId().equals(currentId));
 
         if (duplicate) {
@@ -168,32 +176,32 @@ public class CustomerService {
     }
 
     /**
-     * Cria uma cópia do cliente.
+     * Cria uma cópia defensiva do cliente.
      *
-     * Objetivo:
-     * - proteger o estado interno do Map
+     * @param customer cliente original.
+     * @return cópia do cliente.
      */
-    private Customer copy(Customer customer){
+    private Customer copy(Customer customer) {
         return new Customer(
                 customer.getId(),
                 customer.getName(),
                 customer.getCpf(),
                 customer.getEmail(),
-                customer.getPassword());
+                customer.getPassword()
+        );
     }
 
     /**
      * Normaliza o email para comparação e armazenamento.
      *
-     * Regra:
-     * - remove espaços nas extremidades
-     * - converte para minúsculas
+     * @param email email informado.
+     * @return email normalizado.
      */
-    private String normalizeEmail(String email){
-        if (email== null){
+    private String normalizeEmail(String email) {
+        if (email == null) {
             return null;
         }
-        return email.trim().toLowerCase();
 
+        return email.trim().toLowerCase();
     }
 }

@@ -3,6 +3,7 @@ package br.com.ada.quarkus.service;
 import br.com.ada.quarkus.model.Transaction;
 import br.com.ada.quarkus.model.TransactionType;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.NotFoundException;
 
 import java.math.BigDecimal;
@@ -14,27 +15,31 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * Serviço responsável pelo registro e consulta de transações.
+ *
+ * <p>Armazena o histórico das movimentações financeiras e aplica
+ * validações de consistência para cada tipo de transação.</p>
+ */
 @ApplicationScoped
 public class TransactionService {
 
     /**
-     * Armazena as transações em memória.
-     * Chave: id da transação
-     * Valor: objeto Transaction
+     * Armazena as transações em memória, indexadas pelo id.
      */
     private final Map<Long, Transaction> transactions = new ConcurrentHashMap<>();
 
     /**
-     * Gera IDs únicos para novas transações.
+     * Gera identificadores únicos para novas transações.
      */
     private final AtomicLong sequence = new AtomicLong();
 
     /**
-     * Busca uma transação pelo ID.
+     * Busca uma transação pelo id.
      *
-     * Regra esperada:
-     * - se não existir, lançar NotFoundException
-     * - se existir, devolver cópia
+     * @param id identificador da transação.
+     * @return transação encontrada.
+     * @throws NotFoundException quando a transação não existe.
      */
     public Transaction findById(Long id) {
         return copy(getRequiredTransaction(id));
@@ -43,11 +48,8 @@ public class TransactionService {
     /**
      * Lista todas as transações relacionadas a uma conta.
      *
-     * Regra esperada:
-     * - incluir transações em que a conta é origem
-     * - incluir transações em que a conta é destino
-     * - ordenar por data/hora
-     * - devolver cópias
+     * @param accountId identificador da conta.
+     * @return lista de transações da conta.
      */
     public List<Transaction> listByAccountId(Long accountId) {
         return transactions.values().stream()
@@ -61,11 +63,8 @@ public class TransactionService {
     /**
      * Lista as transações do dia atual relacionadas a uma conta.
      *
-     * Regra esperada:
-     * - filtrar transações da conta
-     * - filtrar apenas as do dia atual
-     * - ordenar por data/hora
-     * - devolver cópias
+     * @param accountId identificador da conta.
+     * @return lista de transações do dia.
      */
     public List<Transaction> listTodayByAccountId(Long accountId) {
         LocalDate today = LocalDate.now();
@@ -82,16 +81,9 @@ public class TransactionService {
     /**
      * Registra uma transação de depósito.
      *
-     * Convenção adotada:
-     * - sourceAccountId = null
-     * - destinationAccountId = conta que recebeu o valor
-     *
-     * Regra esperada:
-     * - gerar ID
-     * - usar tipo DEPOSITO
-     * - usar data/hora atual
-     * - armazenar no Map
-     * - devolver cópia
+     * @param accountId conta que recebeu o valor.
+     * @param amount valor depositado.
+     * @return transação registrada.
      */
     public Transaction createDeposit(Long accountId, BigDecimal amount) {
         long id = sequence.incrementAndGet();
@@ -105,23 +97,18 @@ public class TransactionService {
                 accountId
         );
 
+        validateTransactionConsistency(transaction);
         transactions.put(id, transaction);
+
         return copy(transaction);
     }
 
     /**
      * Registra uma transação de saque.
      *
-     * Convenção adotada:
-     * - sourceAccountId = conta de onde o valor saiu
-     * - destinationAccountId = null
-     *
-     * Regra esperada:
-     * - gerar ID
-     * - usar tipo SAQUE
-     * - usar data/hora atual
-     * - armazenar no Map
-     * - devolver cópia
+     * @param accountId conta de origem.
+     * @param amount valor sacado.
+     * @return transação registrada.
      */
     public Transaction createWithdraw(Long accountId, BigDecimal amount) {
         long id = sequence.incrementAndGet();
@@ -135,23 +122,19 @@ public class TransactionService {
                 null
         );
 
+        validateTransactionConsistency(transaction);
         transactions.put(id, transaction);
+
         return copy(transaction);
     }
 
     /**
      * Registra uma transação de transferência.
      *
-     * Convenção adotada:
-     * - sourceAccountId = conta de origem
-     * - destinationAccountId = conta de destino
-     *
-     * Regra esperada:
-     * - gerar ID
-     * - usar tipo TRANSFERENCIA
-     * - usar data/hora atual
-     * - armazenar no Map
-     * - devolver cópia
+     * @param sourceAccountId conta de origem.
+     * @param destinationAccountId conta de destino.
+     * @param amount valor transferido.
+     * @return transação registrada.
      */
     public Transaction createTransfer(Long sourceAccountId, Long destinationAccountId, BigDecimal amount) {
         long id = sequence.incrementAndGet();
@@ -165,12 +148,18 @@ public class TransactionService {
                 destinationAccountId
         );
 
+        validateTransactionConsistency(transaction);
         transactions.put(id, transaction);
+
         return copy(transaction);
     }
 
     /**
-     * Busca uma transação por ID e exige que ela exista.
+     * Retorna obrigatoriamente uma transação existente.
+     *
+     * @param id identificador da transação.
+     * @return transação encontrada.
+     * @throws NotFoundException quando a transação não existe.
      */
     private Transaction getRequiredTransaction(Long id) {
         Transaction transaction = transactions.get(id);
@@ -185,9 +174,9 @@ public class TransactionService {
     /**
      * Verifica se a transação está relacionada à conta informada.
      *
-     * Regra:
-     * - a conta pode ser origem
-     * - a conta pode ser destino
+     * @param transaction transação analisada.
+     * @param accountId identificador da conta.
+     * @return true quando a conta participa da transação.
      */
     private boolean isRelatedToAccount(Transaction transaction, Long accountId) {
         return (transaction.getSourceAccountId() != null && transaction.getSourceAccountId().equals(accountId))
@@ -195,7 +184,48 @@ public class TransactionService {
     }
 
     /**
-     * Cria uma cópia da transação.
+     * Valida a consistência estrutural da transação conforme seu tipo.
+     *
+     * @param transaction transação a validar.
+     * @throws BadRequestException quando a combinação de tipo, conta de origem
+     * e conta de destino é inválida.
+     */
+    private void validateTransactionConsistency(Transaction transaction) {
+        if (transaction.getType() == null) {
+            throw new BadRequestException("O tipo da transação é obrigatório");
+        }
+
+        TransactionType type = transaction.getType();
+
+        if (type == TransactionType.DEPOSITO) {
+            if (transaction.getSourceAccountId() != null) {
+                throw new BadRequestException("Transação do tipo DEPOSITO não deve possuir conta de origem");
+            }
+            if (transaction.getDestinationAccountId() == null) {
+                throw new BadRequestException("Transação do tipo DEPOSITO deve possuir conta de destino");
+            }
+        } else if (type == TransactionType.SAQUE) {
+            if (transaction.getSourceAccountId() == null) {
+                throw new BadRequestException("Transação do tipo SAQUE deve possuir conta de origem");
+            }
+            if (transaction.getDestinationAccountId() != null) {
+                throw new BadRequestException("Transação do tipo SAQUE não deve possuir conta de destino");
+            }
+        } else if (type == TransactionType.TRANSFERENCIA) {
+            if (transaction.getSourceAccountId() == null) {
+                throw new BadRequestException("Transação do tipo TRANSFERENCIA deve possuir conta de origem");
+            }
+            if (transaction.getDestinationAccountId() == null) {
+                throw new BadRequestException("Transação do tipo TRANSFERENCIA deve possuir conta de destino");
+            }
+        }
+    }
+
+    /**
+     * Cria uma cópia defensiva da transação.
+     *
+     * @param transaction transação original.
+     * @return cópia da transação.
      */
     private Transaction copy(Transaction transaction) {
         return new Transaction(

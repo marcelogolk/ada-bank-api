@@ -15,18 +15,22 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * Serviço responsável pelas operações relacionadas às contas bancárias.
+ *
+ * <p>Centraliza regras de criação de conta, consulta e movimentações
+ * financeiras como depósito, saque e transferência.</p>
+ */
 @ApplicationScoped
 public class AccountService {
 
     /**
-     * Armazena as contas em memória.
-     * Chave: id da conta.
-     * Valor: objeto Account.
+     * Armazena as contas em memória, indexadas pelo id.
      */
     private final Map<Long, Account> accounts = new ConcurrentHashMap<>();
 
     /**
-     * Gera IDs únicos para novas contas.
+     * Gera identificadores únicos para novas contas.
      */
     private final AtomicLong sequence = new AtomicLong();
 
@@ -37,11 +41,9 @@ public class AccountService {
     TransactionService transactionService;
 
     /**
-     * Lista todas as contas cadastradas.
+     * Lista todas as contas cadastradas, ordenadas por id.
      *
-     * Regra esperada:
-     * - retornar as contas ordenadas por id
-     * - devolver cópias, não os objetos internos
+     * @return lista de contas.
      */
     public List<Account> list() {
         return accounts.values().stream()
@@ -51,26 +53,22 @@ public class AccountService {
     }
 
     /**
-     * Busca uma conta pelo ID.
+     * Busca uma conta pelo id.
      *
-     * Regra esperada:
-     * - se não existir, lançar NotFoundException
-     * - se existir, devolver cópia
+     * @param id identificador da conta.
+     * @return conta encontrada.
+     * @throws NotFoundException quando a conta não existe.
      */
     public Account findById(Long id) {
         return copy(getRequiredAccount(id));
     }
 
     /**
-     * Cria uma nova conta.
+     * Cria uma nova conta para um cliente existente.
      *
-     * Regra esperada:
-     * - validar se o cliente existe
-     * - gerar ID
-     * - gerar número da conta
-     * - inicializar saldo com zero
-     * - armazenar no Map
-     * - devolver cópia
+     * @param account dados da conta a ser criada.
+     * @return conta criada.
+     * @throws NotFoundException quando o cliente informado não existe.
      */
     public Account create(Account account) {
         validateCustomerExists(account.getCustomerId());
@@ -90,15 +88,13 @@ public class AccountService {
     }
 
     /**
-     * Realiza depósito em uma conta.
+     * Realiza um depósito em uma conta.
      *
-     * Regra esperada:
-     * - conta deve existir
-     * - valor deve ser maior que zero
-     * - conta ELETRONICA não permite depósito
-     * - atualizar saldo
-     * - registrar transação de depósito
-     * - retornar a transação gerada
+     * @param accountId identificador da conta.
+     * @param amount valor do depósito.
+     * @return transação gerada.
+     * @throws NotFoundException quando a conta não existe.
+     * @throws BadRequestException quando o valor é inválido ou a conta é do tipo ELETRONICA.
      */
     public Transaction deposit(Long accountId, BigDecimal amount) {
         Account account = getRequiredAccount(accountId);
@@ -112,16 +108,14 @@ public class AccountService {
     }
 
     /**
-     * Realiza saque em uma conta.
+     * Realiza um saque em uma conta.
      *
-     * Regra esperada:
-     * - conta deve existir
-     * - valor deve ser maior que zero
-     * - conta ELETRONICA não permite saque
-     * - saldo deve ser suficiente
-     * - atualizar saldo
-     * - registrar transação de saque
-     * - retornar a transação gerada
+     * @param accountId identificador da conta.
+     * @param amount valor do saque.
+     * @return transação gerada.
+     * @throws NotFoundException quando a conta não existe.
+     * @throws BadRequestException quando o valor é inválido, a conta é do tipo ELETRONICA
+     * ou o saldo é insuficiente.
      */
     public Transaction withdraw(Long accountId, BigDecimal amount) {
         Account account = getRequiredAccount(accountId);
@@ -136,18 +130,15 @@ public class AccountService {
     }
 
     /**
-     * Realiza transferência entre contas.
+     * Realiza uma transferência entre contas.
      *
-     * Regra esperada:
-     * - conta de origem deve existir
-     * - conta de destino deve existir
-     * - valor deve ser maior que zero
-     * - contas devem ser diferentes
-     * - saldo da origem deve ser suficiente
-     * - debitar origem
-     * - creditar destino
-     * - registrar transação de transferência
-     * - retornar a transação gerada
+     * @param sourceAccountId id da conta de origem.
+     * @param destinationAccountId id da conta de destino.
+     * @param amount valor da transferência.
+     * @return transação gerada.
+     * @throws NotFoundException quando alguma das contas não existe.
+     * @throws BadRequestException quando o valor é inválido, as contas são iguais
+     * ou o saldo da origem é insuficiente.
      */
     public Transaction transfer(Long sourceAccountId, Long destinationAccountId, BigDecimal amount) {
         Account sourceAccount = getRequiredAccount(sourceAccountId);
@@ -168,7 +159,11 @@ public class AccountService {
     }
 
     /**
-     * Busca uma conta por ID e exige que ela exista.
+     * Retorna obrigatoriamente uma conta existente.
+     *
+     * @param id identificador da conta.
+     * @return conta encontrada.
+     * @throws NotFoundException quando a conta não existe.
      */
     private Account getRequiredAccount(Long id) {
         Account account = accounts.get(id);
@@ -182,6 +177,8 @@ public class AccountService {
 
     /**
      * Valida se o cliente informado existe.
+     *
+     * @param customerId identificador do cliente.
      */
     private void validateCustomerExists(Long customerId) {
         customerService.findById(customerId);
@@ -189,6 +186,9 @@ public class AccountService {
 
     /**
      * Valida se a conta permite depósito.
+     *
+     * @param account conta a validar.
+     * @throws BadRequestException quando a conta é do tipo ELETRONICA.
      */
     private void validateElectronicAccountForDeposit(Account account) {
         if (account.getType() == AccountType.ELETRONICA) {
@@ -198,6 +198,9 @@ public class AccountService {
 
     /**
      * Valida se a conta permite saque.
+     *
+     * @param account conta a validar.
+     * @throws BadRequestException quando a conta é do tipo ELETRONICA.
      */
     private void validateElectronicAccountForWithdraw(Account account) {
         if (account.getType() == AccountType.ELETRONICA) {
@@ -207,6 +210,10 @@ public class AccountService {
 
     /**
      * Valida se a conta possui saldo suficiente.
+     *
+     * @param account conta de origem.
+     * @param amount valor da operação.
+     * @throws BadRequestException quando o saldo é insuficiente.
      */
     private void validateSufficientBalance(Account account, BigDecimal amount) {
         if (account.getBalance().compareTo(amount) < 0) {
@@ -216,6 +223,9 @@ public class AccountService {
 
     /**
      * Valida se o valor da operação é maior que zero.
+     *
+     * @param amount valor informado.
+     * @throws BadRequestException quando o valor é nulo ou menor que zero.
      */
     private void validateAmount(BigDecimal amount) {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
@@ -224,18 +234,20 @@ public class AccountService {
     }
 
     /**
-     * Gera o número da conta.
+     * Gera o número da conta com base no id gerado.
      *
-     * Estratégia inicial:
-     * - usar o id gerado
-     * - formatar no padrão 0001-1
+     * @param id identificador da conta.
+     * @return número formatado da conta.
      */
     private String generateAccountNumber(long id) {
         return String.format("%04d-%d", id, id % 10);
     }
 
     /**
-     * Cria uma cópia da conta.
+     * Cria uma cópia defensiva da conta.
+     *
+     * @param account conta original.
+     * @return cópia da conta.
      */
     private Account copy(Account account) {
         Account copy = new Account(

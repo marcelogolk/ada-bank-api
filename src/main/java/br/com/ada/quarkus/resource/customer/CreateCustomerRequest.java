@@ -1,0 +1,34 @@
+package br.com.ada.quarkus.resource.customer;
+
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
+
+/**
+ * Representa os dados necessários para o cadastro de um cliente.
+ *
+ * @param name nome do cliente.
+ * @param cpf CPF do cliente.
+ * @param email email do cliente.
+ * @param password senha de acesso do cliente.
+ */
+public record CreateCustomerRequest(
+
+        @NotBlank(message = "O nome do cliente é obrigatório")
+        @Size(min = 3, max = 100, message = "O nome do cliente deve conter entre 3 e 100 caracteres")
+        String name,
+
+        @NotBlank(message = "O CPF é obrigatório")
+        @Pattern(regexp = "\\d{11}", message = "O CPF deve conter exatamente 11 dígitos numéricos")
+        String cpf,
+
+        @NotBlank(message = "O email é obrigatório")
+        @Email(message = "O email informado é inválido")
+        String email,
+
+        @NotBlank(message = "A senha é obrigatória")
+        @Size(min = 6, message = "A senha deve conter pelo menos 6 caracteres")
+        String password
+) {
+}

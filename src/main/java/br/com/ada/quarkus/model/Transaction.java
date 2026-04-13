@@ -49,7 +49,7 @@ public class Transaction {
     /**
      * Identificador da conta de origem da transação.
      */
-    @NotNull(message = "A conta de origem é obrigatória")
+
     private Long sourceAccountId;
 
     /**
