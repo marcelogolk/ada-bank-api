@@ -115,6 +115,8 @@ Responsável pelo registro e consulta de transações.
 
 ---
 
+
+
 ### AuthService
 
 Responsável pela autenticação.
