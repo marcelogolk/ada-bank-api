@@ -28,11 +28,11 @@ CREATE TABLE IF NOT EXISTS account (
 
 CREATE TABLE IF NOT EXISTS transaction (
     id               		BIGSERIAL      PRIMARY KEY,
-    type             		VARCHAR(25)    NOT NULL CHECK (tipo IN ('DEPOSITO', 'SAQUE', 'TRANSFERENCIA')),
+    type             		VARCHAR(25)    NOT NULL CHECK (type IN ('DEPOSITO', 'SAQUE', 'TRANSFERENCIA')),
     amount           		DECIMAL(15, 2) NOT NULL,
     date_time         		TIMESTAMP      NOT NULL DEFAULT NOW(),
-    source_account_id		BIGINT         REFERENCES conta(id),
-    destination_account_id	BIGINT         REFERENCES conta(id)
+    source_account_id		BIGINT         REFERENCES account(id),
+    destination_account_id	BIGINT         REFERENCES account(id)
     );
 
 CREATE OR REPLACE VIEW view_balance AS
@@ -42,15 +42,15 @@ SELECT
     c.type,
     COALESCE(SUM(
                      CASE
-                         WHEN t.type = 'DEPOSITO'      AND t.destination_account_id = c.id THEN  t.valor
-                         WHEN t.type = 'SAQUE'         AND t.source_account_id  = c.id THEN  t.valor   -- já negativo
-                         WHEN t.type = 'TRANSFERENCIA' AND t.destination_account_id = c.id THEN  t.valor   -- crédito
-                         WHEN t.type = 'TRANSFERENCIA' AND t.source_account_id  = c.id THEN -t.valor   -- débito
+                         WHEN t.type = 'DEPOSITO'      AND t.destination_account_id = c.id THEN  t.amount
+                         WHEN t.type = 'SAQUE'         AND t.source_account_id  = c.id THEN  t.amount   -- já negativo
+                         WHEN t.type = 'TRANSFERENCIA' AND t.destination_account_id = c.id THEN  t.amount   -- crédito
+                         WHEN t.type = 'TRANSFERENCIA' AND t.source_account_id  = c.id THEN -t.amount   -- débito
                          ELSE 0
                          END
-             ), 0) AS saldo
+             ), 0) AS balance
 FROM account c
-         LEFT JOIN transaction 
+         LEFT JOIN transaction t
                    ON c.id = t.source_account_id
                        OR c.id = t.destination_account_id
 GROUP BY c.id, c.account_number, c.type
@@ -94,7 +94,7 @@ VALUES
     ('0007-1', 'CORRENTE', 9),
     ('0008-2', 'POUPANCA', 10);
 
-INSERT INTO transaction (type, amount, data_time, source_account_id, destination_account_id))
+INSERT INTO transaction (type, amount, date_time, source_account_id, destination_account_id)
 VALUES
     -- Depósitos iniciais
     ('DEPOSITO', 500.00, NOW() - INTERVAL '10 day', NULL, 1),
