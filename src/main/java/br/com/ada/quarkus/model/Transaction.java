@@ -1,5 +1,7 @@
 package br.com.ada.quarkus.model;
 
+import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
+import jakarta.persistence.*;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
@@ -13,50 +15,72 @@ import java.util.Objects;
  * operação, o montante envolvido, as contas de origem e destino, além do registro
  * temporal exato da execução.
  * </p>
+ * <p>
+ * As transações são imutáveis após criação, não possuindo versioning, pois representam
+ * eventos históricos que não devem ser alterados.
+ * </p>
  *
  * @author Marcelo
  * @version 1.0
  */
-public class Transaction {
+@Entity
+@Table(name = "transaction")
+public class Transaction extends PanacheEntityBase {
 
-    /** Identificador único e imutável da transação no banco de dados. */
+    /**
+     * Identificador único e imutável da transação no banco de dados.
+     * Gerado automaticamente pelo banco (auto-increment).
+     */
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     /**
      * Tipo da operação financeira.
      * Define a lógica de movimentação (DEPOSITO, SAQUE ou TRANSFERENCIA)
      * conforme o Enum {@link TransactionType}.
+     * Campo obrigatório e mapeado para a coluna "type" do banco.
      */
     @NotNull(message = "O tipo da transação é obrigatório")
+    @Column(name = "type", nullable = false, length = 25)
     private TransactionType type;
 
     /**
      * Valor monetário da operação.
      * Utiliza {@link BigDecimal} para garantir precisão decimal absoluta,
      * evitando erros de arredondamento comuns em tipos de ponto flutuante.
+     * Campo obrigatório com mínimo de 0,01 e mapeado para a coluna "amount" do banco.
      */
     @NotNull(message = "O valor da transação é obrigatório")
     @DecimalMin(value = "0.01", message = "O valor da transação deve ser no mínimo 0,01")
+    @Column(name = "amount", nullable = false, precision = 15, scale = 2)
     private BigDecimal amount;
 
     /**
      * Carimbo de data e hora da transação.
      * Registra o momento em que a transação foi processada pelo servidor.
+     * Campo obrigatório e mapeado para a coluna "date_time" do banco.
      */
     @NotNull(message = "A data e hora da transação é obrigatória")
+    @Column(name = "date_time", nullable = false)
     private LocalDateTime dateTime;
 
     /**
      * Identificador da conta de origem da transação.
+     * Representa a chave estrangeira para a entidade Account.
+     * Opcional em operações de DEPOSITO.
+     * Mapeado para a coluna "source_account_id" do banco.
      */
-
+    @Column(name = "source_account_id")
     private Long sourceAccountId;
 
     /**
      * Identificador da conta que recebe os fundos.
-     * Este campo é opcional em operações de SAQUE, mas obrigatório em
-     * TRANSFERENCIAS e DEPOSITOS.
+     * Representa a chave estrangeira para a entidade Account.
+     * Opcional em operações de SAQUE.
+     * Mapeado para a coluna "destination_account_id" do banco.
      */
+    @Column(name = "destination_account_id")
     private Long destinationAccountId;
 
     /**
@@ -85,6 +109,8 @@ public class Transaction {
         this.sourceAccountId = sourceAccountId;
         this.destinationAccountId = destinationAccountId;
     }
+
+    // ========== Getters e Setters ==========
 
     /** @return O identificador único da transação. */
     public Long getId() {
@@ -146,10 +172,8 @@ public class Transaction {
         this.destinationAccountId = destinationAccountId;
     }
 
-    /**
-     * Gera uma representação textual detalhada da transação.
-     * @return String contendo o estado atual do objeto Transaction.
-     */
+    // ========== Métodos Object ==========
+
     @Override
     public String toString() {
         return "Transaction{" +
@@ -162,12 +186,6 @@ public class Transaction {
                 '}';
     }
 
-    /**
-     * Compara a igualdade entre duas transações baseando-se no ID único.
-     *
-     * @param o Objeto a ser comparado.
-     * @return true se as transações possuírem o mesmo ID.
-     */
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -176,10 +194,6 @@ public class Transaction {
         return Objects.equals(id, that.id);
     }
 
-    /**
-     * Gera o código hash da transação.
-     * @return Valor hash baseado no identificador ID.
-     */
     @Override
     public int hashCode() {
         return Objects.hash(id);

@@ -1,5 +1,7 @@
 package br.com.ada.quarkus.model;
 
+import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
+import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -12,56 +14,90 @@ import java.util.Objects;
  * <p>
  * Esta classe é o modelo base para armazenamento de informações pessoais,
  * contendo validações específicas para conformidade com dados cadastrais.
+ * Utiliza otimistic locking através da anotação @Version para garantir
+ * consistência em operações concorrentes.
  * </p>
  *
  * @author Marcelo
  * @version 1.0
  */
-public class Customer {
+@Entity
+@Table(name = "customer")
+public class Customer extends PanacheEntityBase {
 
-    /** Identificador único do cliente no banco de dados. */
+    /**
+     * Identificador único do cliente no banco de dados.
+     * Gerado automaticamente pelo banco (auto-increment).
+     */
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** Nome completo do cliente. Deve conter entre 3 e 100 caracteres. */
+    /**
+     * Nome completo do cliente.
+     * Deve conter entre 3 e 100 caracteres alfabéticos.
+     * Campo obrigatório e mapeado para a coluna "name" do banco.
+     */
     @NotBlank(message = "O nome do cliente é obrigatório")
     @Size(min = 3, max = 100, message = "O nome do cliente deve conter entre 3 e 100 caracteres")
+    @Column(name = "name", nullable = false, length = 100)
     private String name;
 
-    /** Cadastro de Pessoa Física (CPF).
-     * Deve conter exatamente 11 dígitos numéricos.
+    /**
+     * Cadastro de Pessoa Física (CPF) do cliente.
+     * Deve conter exatamente 11 dígitos numéricos, sem formatação.
+     * Campo obrigatório, único e mapeado para a coluna "cpf" do banco.
      */
     @NotBlank(message = "O CPF é obrigatório")
     @Pattern(regexp = "\\d{11}", message = "O CPF deve conter exatamente 11 dígitos numéricos")
+    @Column(name = "cpf", nullable = false, unique = true, length = 11)
     private String cpf;
 
-    /** Endereço de e-mail eletrônico para contato e notificações. */
+    /**
+     * Endereço de e-mail eletrônico do cliente.
+     * Utilizado para contato, notificações e autenticação.
+     * Campo obrigatório, único e validado como e-mail válido.
+     */
     @NotBlank(message = "O email é obrigatório")
     @Email(message = "O email informado é inválido")
+    @Column(name = "email", nullable = false, unique = true, length = 255)
     private String email;
 
-    /** Senha para login no sistema. */
+    /**
+     * Senha para autenticação do cliente no sistema.
+     * Campo obrigatório com mínimo de 6 caracteres.
+     * Não é serializado em respostas JSON por segurança (@JsonIgnore).
+     */
     @NotBlank(message = "A senha é obrigatória")
     @Size(min = 6, message = "A senha deve conter pelo menos 6 caracteres")
     @JsonIgnore
+    @Column(name = "password", nullable = false)
     private String password;
 
+    /**
+     * Versão do registro para controle de concorrência (Optimistic Locking).
+     * Incrementado automaticamente a cada atualização pelo Hibernate.
+     * Previne conflitos em operações concorrentes.
+     */
+    @Version
+    private Long version;
 
     /**
      * Construtor padrão (sem argumentos).
-     * Necessário para frameworks de persistência e serialização JSON.
+     * Necessário para frameworks de persistência (Hibernate/JPA) e serialização JSON (Jackson).
      */
     public Customer() {
     }
 
     /**
-     * Construtor completo para inicialização de todos os campos.
+     * Construtor completo para inicialização de todos os campos principais.
+     * A versão é inicializada automaticamente pelo Hibernate.
      *
-     * @param id    O identificador único.
-     * @param name  O nome completo do cliente.
-     * @param cpf   O documento de identificação (CPF).
-     * @param email O endereço de e-mail.
-     * @param password A senha para login.
-     *
+     * @param id       O identificador único do cliente.
+     * @param name     O nome completo do cliente.
+     * @param cpf      O documento de identificação (CPF) com 11 dígitos.
+     * @param email    O endereço de e-mail eletrônico.
+     * @param password A senha para autenticação no sistema.
      */
     public Customer(Long id, String name, String cpf, String email, String password) {
         this.id = id;
@@ -71,32 +107,34 @@ public class Customer {
         this.password = password;
     }
 
-    /** @return O ID do cliente. */
+    // ========== Getters e Setters ==========
+
+    /** @return O identificador único do cliente. */
     public Long getId() {
         return id;
     }
 
-    /** @param id O novo ID a ser definido. */
+    /** @param id O novo identificador do cliente. */
     public void setId(Long id) {
         this.id = id;
     }
 
-    /** @return O nome do cliente. */
+    /** @return O nome completo do cliente. */
     public String getName() {
         return name;
     }
 
-    /** @param name O novo nome a ser definido. */
+    /** @param name O novo nome do cliente. */
     public void setName(String name) {
         this.name = name;
     }
 
-    /** @return O CPF do cliente. */
+    /** @return O CPF do cliente (11 dígitos). */
     public String getCpf() {
         return cpf;
     }
 
-    /** @param cpf O novo CPF a ser definido. */
+    /** @param cpf O novo CPF do cliente. */
     public void setCpf(String cpf) {
         this.cpf = cpf;
     }
@@ -106,26 +144,36 @@ public class Customer {
         return email;
     }
 
-    /** @param email O novo e-mail a ser definido. */
+    /** @param email O novo e-mail do cliente. */
     public void setEmail(String email) {
         this.email = email;
     }
 
-    /** @return A Senha de login do cliente. */
-    @JsonIgnore
+    /**
+     * Retorna a senha do cliente.
+     * <p>
+     * <strong>Nota de Segurança:</strong> Esta senha NÃO é serializada em respostas JSON
+     * devido à anotação @JsonIgnore no atributo.
+     * </p>
+     *
+     * @return A senha de autenticação do cliente.
+     */
     public String getPassword() {
         return password;
     }
 
-    /** @param password A nova senha de login a ser definida. */
+    /** @param password A nova senha de autenticação. */
     public void setPassword(String password) {
         this.password = password;
     }
 
-    /**
-     * Gera uma representação textual do objeto Customer (Cliente).
-     * @return String contendo os dados do cliente.
-     */
+    /** @return A versão atual do registro (Optimistic Locking). */
+    public Long getVersion() {
+        return version;
+    }
+
+    // ========== Métodos Object ==========
+
     @Override
     public String toString() {
         return "Customer{" +
@@ -133,16 +181,10 @@ public class Customer {
                 ", name='" + name + '\'' +
                 ", cpf='" + cpf + '\'' +
                 ", email='" + email + '\'' +
+                ", version=" + version +
                 '}';
     }
 
-    /**
-     * Compara este cliente com outro objeto para verificar igualdade.
-     * A igualdade é baseada no ID e no CPF.
-     *
-     * @param o Objeto a ser comparado.
-     * @return true se forem iguais, false caso contrário.
-     */
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -152,10 +194,6 @@ public class Customer {
                 Objects.equals(cpf, customer.cpf);
     }
 
-    /**
-     * Gera o código hash para o cliente, consistente com o método equals.
-     * @return Valor do hash code.
-     */
     @Override
     public int hashCode() {
         return Objects.hash(id, cpf);
