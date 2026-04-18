@@ -1,100 +1,140 @@
 package br.com.ada.quarkus.service;
 
-import br.com.ada.quarkus.model.Account;
-import br.com.ada.quarkus.model.AccountType;
-import br.com.ada.quarkus.model.Transaction;
+import br.com.ada.quarkus.model.*;
+import io.quarkus.panache.common.Page;
+import io.quarkus.panache.common.Sort;
+import io.quarkus.security.ForbiddenException;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.NotFoundException;
 
 import java.math.BigDecimal;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Serviço responsável pelas operações relacionadas às contas bancárias.
+ * <p>
+ * Centraliza regras de criação de conta, consulta e movimentações
+ * financeiras como depósito, saque e transferência.
+ * </p>
+ * <p>
+ * Utiliza Panache para persistência em banco de dados PostgreSQL,
+ * garantindo que todas as operações sejam transacionais e auditáveis.
+ * </p>
  *
- * <p>Centraliza regras de criação de conta, consulta e movimentações
- * financeiras como depósito, saque e transferência.</p>
+ * @author Marcelo
+ * @version 1.0
  */
 @ApplicationScoped
 public class AccountService {
-
-    /**
-     * Armazena as contas em memória, indexadas pelo id.
-     */
-    private final Map<Long, Account> accounts = new ConcurrentHashMap<>();
-
-    /**
-     * Gera identificadores únicos para novas contas.
-     */
-    private final AtomicLong sequence = new AtomicLong();
 
     @Inject
     CustomerService customerService;
 
     @Inject
+    CurrentUserService currentUserService;
+
+    @Inject
     TransactionService transactionService;
 
     /**
-     * Lista todas as contas cadastradas, ordenadas por id.
+     * Valida se o usuário logado é o proprietário da conta.
      *
-     * @return lista de contas.
+     * <p>Apenas o proprietário (cliente dono) pode realizar operações
+     * de saque ou transferência. Depósitos podem ser feitos por qualquer um.</p>
+     *
+     * @param account conta a validar.
+     * @throws ForbiddenException quando o usuário não é o proprietário.
      */
-    public List<Account> list() {
-        return accounts.values().stream()
-                .sorted(Comparator.comparing(Account::getId))
-                .map(this::copy)
-                .toList();
+    private void checkAccountOwnership(Account account) {
+        LoggedUser currentUser = loggedUser();
+
+        if (currentUser.id().equals(account.getCustomerId())) {
+            return;
+        }
+
+        throw new ForbiddenException(
+                "Acesso negado: apenas o proprietário da conta pode realizar esta operação"
+        );
     }
 
     /**
-     * Busca uma conta pelo id.
+     * Retorna o usuário logado no momento.
      *
-     * @param id identificador da conta.
-     * @return conta encontrada.
-     * @throws NotFoundException quando a conta não existe.
+     * @return usuário logado.
+     * @throws NotFoundException quando nenhum usuário está autenticado.
+     */
+    public LoggedUser loggedUser() {
+        return currentUserService.getLoggedUser();
+    }
+
+    /**
+     * Lista contas com filtro opcional por cliente.
+     *
+     * @param customerId ID do cliente (opcional).
+     * @param page Número da página.
+     * @param size Quantidade por página.
+     * @return Resultado paginado.
+     */
+    public PageResult<Account> list(Long customerId, int page, int size) {
+        var query = (customerId != null)
+                ? Account.find("customerId", customerId)
+                : Account.findAll(Sort.by("id"));
+        var result = query.page(Page.of(page, size));
+        return new PageResult<>(result.list(), page, size, result.count());
+    }
+
+    /**
+     * Busca uma conta pelo identificador.
+     *
+     * @param id Identificador único da conta.
+     * @return Conta encontrada.
+     * @throws NotFoundException Quando a conta não existe no banco.
      */
     public Account findById(Long id) {
-        return copy(getRequiredAccount(id));
+        return getRequiredAccount(id);
     }
 
     /**
      * Cria uma nova conta para um cliente existente.
+     * <p>
+     * O número da conta é gerado automaticamente com base no ID auto-increment,
+     * seguindo o padrão: 9 dígitos zero-padded + 1 dígito verificador (total 10 dígitos).
+     * Exemplo: ID=1 → número base="000000001" → dígito=8 → número completo="0000000018"
+     * </p>
      *
-     * @param account dados da conta a ser criada.
-     * @return conta criada.
-     * @throws NotFoundException quando o cliente informado não existe.
+     * @param account Dados da conta a ser criada (tipo e cliente).
+     * @return Conta criada e persistida no banco.
+     * @throws NotFoundException Quando o cliente informado não existe.
      */
     public Account create(Account account) {
         validateCustomerExists(account.getCustomerId());
 
-        long id = sequence.incrementAndGet();
-        String accountNumber = generateAccountNumber(id);
+        Account newAccount = new Account();
+        newAccount.setType(account.getType());
+        newAccount.setCustomerId(account.getCustomerId());
 
-        Account newAccount = new Account(
-                id,
-                accountNumber,
-                account.getType(),
-                account.getCustomerId()
-        );
+        newAccount.persist();
 
-        accounts.put(id, newAccount);
-        return copy(newAccount);
+        String baseNumber = String.format("%09d", newAccount.getId());
+        newAccount.setAccountNumber(baseNumber);
+
+        int checkDigit = newAccount.calculateCheckDigit();
+        String fullAccountNumber = baseNumber + checkDigit;
+
+        newAccount.setAccountNumber(fullAccountNumber);
+
+        return newAccount;
     }
 
     /**
      * Realiza um depósito em uma conta.
      *
-     * @param accountId identificador da conta.
-     * @param amount valor do depósito.
-     * @return transação gerada.
-     * @throws NotFoundException quando a conta não existe.
-     * @throws BadRequestException quando o valor é inválido ou a conta é do tipo ELETRONICA.
+     * @param accountId Identificador da conta receptora.
+     * @param amount Valor do depósito.
+     * @return Transação de depósito criada.
+     * @throws NotFoundException Quando a conta não existe.
+     * @throws BadRequestException Quando o valor é inválido ou conta é ELETRONICA.
      */
     public Transaction deposit(Long accountId, BigDecimal amount) {
         Account account = getRequiredAccount(accountId);
@@ -102,58 +142,49 @@ public class AccountService {
         validateAmount(amount);
         validateElectronicAccountForDeposit(account);
 
-        account.setBalance(account.getBalance().add(amount));
-
         return transactionService.createDeposit(accountId, amount);
     }
 
     /**
      * Realiza um saque em uma conta.
      *
-     * @param accountId identificador da conta.
-     * @param amount valor do saque.
-     * @return transação gerada.
-     * @throws NotFoundException quando a conta não existe.
-     * @throws BadRequestException quando o valor é inválido, a conta é do tipo ELETRONICA
-     * ou o saldo é insuficiente.
+     * @param accountId Identificador da conta de origem.
+     * @param amount Valor do saque.
+     * @return Transação de saque criada.
+     * @throws ForbiddenException Quando o usuário não é o proprietário.
+     * @throws BadRequestException Quando há problemas na operação.
      */
     public Transaction withdraw(Long accountId, BigDecimal amount) {
         Account account = getRequiredAccount(accountId);
+
+        checkAccountOwnership(account);
 
         validateAmount(amount);
         validateElectronicAccountForWithdraw(account);
         validateSufficientBalance(account, amount);
 
-        account.setBalance(account.getBalance().subtract(amount));
-
         return transactionService.createWithdraw(accountId, amount);
     }
 
     /**
-     * Realiza uma transferência entre contas.
+     * Realiza uma transferência entre duas contas.
      *
-     * @param sourceAccountId id da conta de origem.
-     * @param destinationAccountId id da conta de destino.
-     * @param amount valor da transferência.
-     * @return transação gerada.
-     * @throws NotFoundException quando alguma das contas não existe.
-     * @throws BadRequestException quando o valor é inválido, as contas são iguais
-     * ou o saldo da origem é insuficiente.
+     * @param sourceAccountId Identificador da conta de origem.
+     * @param destinationAccountId Identificador da conta de destino.
+     * @param amount Valor da transferência.
+     * @return Transação de transferência criada.
+     * @throws ForbiddenException Quando o usuário não é o proprietário da conta de origem.
+     * @throws BadRequestException Quando há problemas na operação.
      */
     public Transaction transfer(Long sourceAccountId, Long destinationAccountId, BigDecimal amount) {
         Account sourceAccount = getRequiredAccount(sourceAccountId);
         Account destinationAccount = getRequiredAccount(destinationAccountId);
 
+        checkAccountOwnership(sourceAccount);
+
         validateAmount(amount);
-
-        if (sourceAccount.getId().equals(destinationAccount.getId())) {
-            throw new BadRequestException("A conta de origem deve ser diferente da conta de destino");
-        }
-
+        validateDifferentAccounts(sourceAccountId, destinationAccountId);
         validateSufficientBalance(sourceAccount, amount);
-
-        sourceAccount.setBalance(sourceAccount.getBalance().subtract(amount));
-        destinationAccount.setBalance(destinationAccount.getBalance().add(amount));
 
         return transactionService.createTransfer(sourceAccountId, destinationAccountId, amount);
     }
@@ -161,12 +192,12 @@ public class AccountService {
     /**
      * Retorna obrigatoriamente uma conta existente.
      *
-     * @param id identificador da conta.
-     * @return conta encontrada.
-     * @throws NotFoundException quando a conta não existe.
+     * @param id Identificador da conta.
+     * @return Conta encontrada no banco.
+     * @throws NotFoundException Quando a conta não existe.
      */
     private Account getRequiredAccount(Long id) {
-        Account account = accounts.get(id);
+        Account account = Account.findById(id);
 
         if (account == null) {
             throw new NotFoundException("Conta não encontrada");
@@ -176,19 +207,20 @@ public class AccountService {
     }
 
     /**
-     * Valida se o cliente informado existe.
+     * Valida se o cliente informado existe no banco.
      *
-     * @param customerId identificador do cliente.
+     * @param customerId Identificador do cliente.
+     * @throws NotFoundException Quando o cliente não existe.
      */
     private void validateCustomerExists(Long customerId) {
         customerService.findById(customerId);
     }
 
     /**
-     * Valida se a conta permite depósito.
+     * Valida se a conta permite operação de depósito.
      *
-     * @param account conta a validar.
-     * @throws BadRequestException quando a conta é do tipo ELETRONICA.
+     * @param account Conta a validar.
+     * @throws BadRequestException Quando a conta é do tipo ELETRONICA.
      */
     private void validateElectronicAccountForDeposit(Account account) {
         if (account.getType() == AccountType.ELETRONICA) {
@@ -197,10 +229,10 @@ public class AccountService {
     }
 
     /**
-     * Valida se a conta permite saque.
+     * Valida se a conta permite operação de saque.
      *
-     * @param account conta a validar.
-     * @throws BadRequestException quando a conta é do tipo ELETRONICA.
+     * @param account Conta a validar.
+     * @throws BadRequestException Quando a conta é do tipo ELETRONICA.
      */
     private void validateElectronicAccountForWithdraw(Account account) {
         if (account.getType() == AccountType.ELETRONICA) {
@@ -209,11 +241,24 @@ public class AccountService {
     }
 
     /**
-     * Valida se a conta possui saldo suficiente.
+     * Valida se a conta de origem é diferente da conta de destino.
      *
-     * @param account conta de origem.
-     * @param amount valor da operação.
-     * @throws BadRequestException quando o saldo é insuficiente.
+     * @param sourceAccountId ID da conta de origem.
+     * @param destinationAccountId ID da conta de destino.
+     * @throws BadRequestException Quando as contas são iguais.
+     */
+    private void validateDifferentAccounts(Long sourceAccountId, Long destinationAccountId) {
+        if (sourceAccountId.equals(destinationAccountId)) {
+            throw new BadRequestException("A conta de origem deve ser diferente da conta de destino");
+        }
+    }
+
+    /**
+     * Valida se a conta possui saldo suficiente para a operação.
+     *
+     * @param account Conta de origem.
+     * @param amount Valor da operação.
+     * @throws BadRequestException Quando o saldo é insuficiente.
      */
     private void validateSufficientBalance(Account account, BigDecimal amount) {
         if (account.getBalance().compareTo(amount) < 0) {
@@ -222,42 +267,14 @@ public class AccountService {
     }
 
     /**
-     * Valida se o valor da operação é maior que zero.
+     * Valida se o valor da operação é válido.
      *
-     * @param amount valor informado.
-     * @throws BadRequestException quando o valor é nulo ou menor que zero.
+     * @param amount Valor informado.
+     * @throws BadRequestException Quando o valor é nulo ou menor/igual a zero.
      */
     private void validateAmount(BigDecimal amount) {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new BadRequestException("O valor da operação deve ser maior que zero");
         }
-    }
-
-    /**
-     * Gera o número da conta com base no id gerado.
-     *
-     * @param id identificador da conta.
-     * @return número formatado da conta.
-     */
-    private String generateAccountNumber(long id) {
-        return String.format("%04d-%d", id, id % 10);
-    }
-
-    /**
-     * Cria uma cópia defensiva da conta.
-     *
-     * @param account conta original.
-     * @return cópia da conta.
-     */
-    private Account copy(Account account) {
-        Account copy = new Account(
-                account.getId(),
-                account.getAccountNumber(),
-                account.getType(),
-                account.getCustomerId()
-        );
-
-        copy.setBalance(account.getBalance());
-        return copy;
     }
 }

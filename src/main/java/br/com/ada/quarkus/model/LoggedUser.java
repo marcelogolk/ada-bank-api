@@ -65,4 +65,6 @@ public record LoggedUser(
     public boolean isCustomer() {
         return "CLIENTE".equals(role);
     }
+
+
 }

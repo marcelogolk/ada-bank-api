@@ -34,14 +34,16 @@ public class Account extends PanacheEntityBase {
     private Long id;
 
     /**
-     * Número identificador da conta.
-     * Deve conter apenas dígitos, com extensão de 5 a 10 caracteres.
+     * Número identificador da conta com dígito verificador.
+     * Formato: 9 dígitos base + 1 dígito verificador (total 10 dígitos).
+     * Exemplo: "0000000018" (base "000000001" + dígito "8")
      * Campo obrigatório, único e mapeado para a coluna "account_number" do banco.
      */
     @NotBlank(message = "O número da conta é obrigatório")
-    @Pattern(regexp = "\\d{5,10}", message = "O número da conta deve conter entre 5 e 10 dígitos numéricos")
-    @Column(name = "account_number", nullable = false, unique = true, length = 20)
+    @Pattern(regexp = "\\d{10}", message = "O número da conta deve conter exatamente 10 dígitos (9 base + 1 verificador)")
+    @Column(name = "account_number", nullable = false, unique = true, length = 10)
     private String accountNumber;
+
 
     /**
      * Tipo da conta bancária.
@@ -160,6 +162,31 @@ public class Account extends PanacheEntityBase {
     public BigDecimal getBalance() {
         return balance;
     }
+
+    /**
+     *  Calcula o dígito verificador do número da conta.
+     *  Fórmula: 9 - (soma dos dígitos % 10)
+     *
+     *  @return O dígito verificador calculado.
+     */
+    public int calculateCheckDigit() {
+        int soma = 0;
+        for (char c : accountNumber.toCharArray()) {
+            soma += c - '0';
+        }
+        return 9 - (soma % 10);
+    }
+
+    /**
+     * Retorna o número completo da conta (base + dígito verificador).
+     * Este é o número que deve ser exibido ao cliente.
+     *
+     * @return Número completo com 5 dígitos (ex: "00010").
+     */
+    public String getFullAccountNumber() {
+        return accountNumber + calculateCheckDigit();
+    }
+
 
     // ========== Métodos Object ==========
 

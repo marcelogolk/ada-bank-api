@@ -1,45 +1,42 @@
 package br.com.ada.quarkus.service;
 
 import br.com.ada.quarkus.model.Customer;
+import br.com.ada.quarkus.model.LoggedUser;
+import br.com.ada.quarkus.model.PageResult;
+import io.quarkus.panache.common.Page;
+import io.quarkus.panache.common.Sort;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.NotFoundException;
-
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Serviço responsável pelas operações de gerenciamento de clientes.
  *
  * <p>Centraliza as regras de negócio relacionadas a cadastro, consulta
- * e atualização de clientes, mantendo os dados em memória.</p>
+ * e atualização de clientes, com persistência em banco de dados PostgreSQL.</p>
+ *
+ * @author Marcelo
+ * @version 2.0
  */
 @ApplicationScoped
 public class CustomerService {
 
-    /**
-     * Armazena os clientes em memória, indexados pelo id.
-     */
-    private final Map<Long, Customer> customers = new ConcurrentHashMap<>();
+    @Inject
+    CurrentUserService currentUserService;
 
     /**
-     * Gera identificadores únicos para novos clientes.
-     */
-    private final AtomicLong sequence = new AtomicLong();
-
-    /**
-     * Lista todos os clientes cadastrados, ordenados por id.
+     * Lista todos os clientes cadastrados com paginação, ordenados por id.
      *
-     * @return lista de clientes.
+     * @param page Número da página (0-indexed).
+     * @param size Quantidade de clientes por página.
+     * @return resultado paginado de clientes.
      */
-    public List<Customer> list() {
-        return customers.values().stream()
-                .sorted(Comparator.comparing(Customer::getId))
-                .map(this::copy)
-                .toList();
+    public PageResult<Customer> list(int page, int size) {
+        var query = Customer.findAll(Sort.by("id"));
+        var result = query.page(Page.of(page, size));
+
+        return new PageResult<>(result.list(), page, size, result.count());
     }
 
     /**
@@ -50,7 +47,7 @@ public class CustomerService {
      * @throws NotFoundException quando o cliente não existe.
      */
     public Customer findById(Long id) {
-        return copy(getRequiredCustomer(id));
+        return getRequiredCustomer(id);
     }
 
     /**
@@ -63,10 +60,7 @@ public class CustomerService {
     public Customer findByEmail(String email) {
         String normalizedEmail = normalizeEmail(email);
 
-        return customers.values().stream()
-                .filter(customer -> customer.getEmail().equalsIgnoreCase(normalizedEmail))
-                .findFirst()
-                .map(this::copy)
+        return Customer.find("email", normalizedEmail).firstResultOptional()
                 .orElseThrow(() -> new NotFoundException(
                         "Cliente com o email informado não foi encontrado"
                 ));
@@ -76,25 +70,22 @@ public class CustomerService {
      * Cadastra um novo cliente após validar unicidade de CPF e email.
      *
      * @param customer dados do cliente a ser criado.
-     * @return cliente criado.
+     * @return cliente criado e persistido no banco.
      * @throws BadRequestException quando CPF ou email já estão em uso.
      */
     public Customer create(Customer customer) {
         validateUniqueCpf(customer.getCpf(), null);
         validateUniqueEmail(customer.getEmail(), null);
 
-        long id = sequence.incrementAndGet();
+        Customer newCustomer = new Customer();
+        newCustomer.setName(customer.getName());
+        newCustomer.setCpf(customer.getCpf());
+        newCustomer.setEmail(normalizeEmail(customer.getEmail()));
+        newCustomer.setPassword(customer.getPassword());
 
-        Customer newCustomer = new Customer(
-                id,
-                customer.getName(),
-                customer.getCpf(),
-                normalizeEmail(customer.getEmail()),
-                customer.getPassword()
-        );
+        newCustomer.persist();
 
-        customers.put(id, newCustomer);
-        return copy(newCustomer);
+        return newCustomer;
     }
 
     /**
@@ -119,7 +110,17 @@ public class CustomerService {
         existingCustomer.setEmail(normalizeEmail(email));
         existingCustomer.setPassword(password);
 
-        return copy(existingCustomer);
+        return existingCustomer;
+    }
+
+    /**
+     * Retorna o usuário logado no momento.
+     *
+     * @return usuário logado.
+     * @throws NotFoundException quando nenhum usuário está autenticado.
+     */
+    public LoggedUser loggedUser() {
+        return currentUserService.getLoggedUser();
     }
 
     /**
@@ -130,7 +131,7 @@ public class CustomerService {
      * @throws NotFoundException quando o cliente não existe.
      */
     private Customer getRequiredCustomer(Long id) {
-        Customer customer = customers.get(id);
+        Customer customer = Customer.findById(id);
 
         if (customer == null) {
             throw new NotFoundException("Cliente não encontrado");
@@ -147,11 +148,9 @@ public class CustomerService {
      * @throws BadRequestException quando o CPF já está cadastrado.
      */
     private void validateUniqueCpf(String cpf, Long currentId) {
-        boolean duplicate = customers.values().stream()
-                .anyMatch(customer -> customer.getCpf().equals(cpf)
-                        && !customer.getId().equals(currentId));
+        Customer existingCustomer = Customer.find("cpf", cpf).firstResult();
 
-        if (duplicate) {
+        if (existingCustomer != null && !existingCustomer.getId().equals(currentId)) {
             throw new BadRequestException("Já existe um cliente com o CPF informado");
         }
     }
@@ -165,30 +164,11 @@ public class CustomerService {
      */
     private void validateUniqueEmail(String email, Long currentId) {
         String normalizedEmail = normalizeEmail(email);
+        Customer existingCustomer = Customer.find("email", normalizedEmail).firstResult();
 
-        boolean duplicate = customers.values().stream()
-                .anyMatch(customer -> customer.getEmail().equalsIgnoreCase(normalizedEmail)
-                        && !customer.getId().equals(currentId));
-
-        if (duplicate) {
+        if (existingCustomer != null && !existingCustomer.getId().equals(currentId)) {
             throw new BadRequestException("Já existe um cliente com o email informado");
         }
-    }
-
-    /**
-     * Cria uma cópia defensiva do cliente.
-     *
-     * @param customer cliente original.
-     * @return cópia do cliente.
-     */
-    private Customer copy(Customer customer) {
-        return new Customer(
-                customer.getId(),
-                customer.getName(),
-                customer.getCpf(),
-                customer.getEmail(),
-                customer.getPassword()
-        );
     }
 
     /**

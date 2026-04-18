@@ -1,7 +1,6 @@
 package br.com.ada.quarkus.resource.customer;
 
 import br.com.ada.quarkus.model.Customer;
-import br.com.ada.quarkus.service.CustomerService;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
@@ -32,7 +31,7 @@ import java.util.List;
 public class CustomerResource {
 
     @Inject
-    CustomerService customerService;
+    CustomerServiceOld customerService;
 
     /**
      * Lista todos os clientes cadastrados.

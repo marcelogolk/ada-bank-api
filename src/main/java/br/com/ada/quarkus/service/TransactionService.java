@@ -1,7 +1,10 @@
 package br.com.ada.quarkus.service;
 
+import br.com.ada.quarkus.model.PageResult;
 import br.com.ada.quarkus.model.Transaction;
 import br.com.ada.quarkus.model.TransactionType;
+import io.quarkus.panache.common.Page;
+import io.quarkus.panache.common.Sort;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.NotFoundException;
@@ -9,30 +12,19 @@ import jakarta.ws.rs.NotFoundException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Serviço responsável pelo registro e consulta de transações.
  *
- * <p>Armazena o histórico das movimentações financeiras e aplica
- * validações de consistência para cada tipo de transação.</p>
+ * <p>Armazena o histórico das movimentações financeiras com persistência
+ * em banco de dados PostgreSQL e aplica validações de consistência para
+ * cada tipo de transação.</p>
+ *
+ * @author Marcelo
+ * @version 2.0
  */
 @ApplicationScoped
 public class TransactionService {
-
-    /**
-     * Armazena as transações em memória, indexadas pelo id.
-     */
-    private final Map<Long, Transaction> transactions = new ConcurrentHashMap<>();
-
-    /**
-     * Gera identificadores únicos para novas transações.
-     */
-    private final AtomicLong sequence = new AtomicLong();
 
     /**
      * Busca uma transação pelo id.
@@ -42,40 +34,48 @@ public class TransactionService {
      * @throws NotFoundException quando a transação não existe.
      */
     public Transaction findById(Long id) {
-        return copy(getRequiredTransaction(id));
+        return getRequiredTransaction(id);
     }
 
     /**
-     * Lista todas as transações relacionadas a uma conta.
+     * Lista todas as transações relacionadas a uma conta com paginação,
+     * ordenadas por data e hora (decrescente).
      *
      * @param accountId identificador da conta.
-     * @return lista de transações da conta.
+     * @param page Número da página (0-indexed).
+     * @param size Quantidade de transações por página.
+     * @return resultado paginado de transações da conta.
      */
-    public List<Transaction> listByAccountId(Long accountId) {
-        return transactions.values().stream()
-                .filter(transaction -> isRelatedToAccount(transaction, accountId))
-                .sorted(Comparator.comparing(Transaction::getDateTime)
-                        .thenComparing(Transaction::getId))
-                .map(this::copy)
-                .toList();
-    }
+    public PageResult<Transaction> listByAccountId(Long accountId, int page, int size) {
+        var query = Transaction.find(
+                "sourceAccountId = ?1 OR destinationAccountId = ?1",
+                Sort.by("dateTime").descending(),
+                accountId
+        );
+        var result = query.page(Page.of(page, size));
 
+        return new PageResult<>(result.list(), page, size, result.count());
+    }
     /**
-     * Lista as transações do dia atual relacionadas a uma conta.
+     * Lista as transações do dia atual relacionadas a uma conta com paginação.
      *
      * @param accountId identificador da conta.
-     * @return lista de transações do dia.
+     * @param page Número da página (0-indexed).
+     * @param size Quantidade de transações por página.
+     * @return resultado paginado de transações do dia.
      */
-    public List<Transaction> listTodayByAccountId(Long accountId) {
+    public PageResult<Transaction> listTodayByAccountId(Long accountId, int page, int size) {
         LocalDate today = LocalDate.now();
 
-        return transactions.values().stream()
-                .filter(transaction -> isRelatedToAccount(transaction, accountId))
-                .filter(transaction -> transaction.getDateTime().toLocalDate().equals(today))
-                .sorted(Comparator.comparing(Transaction::getDateTime)
-                        .thenComparing(Transaction::getId))
-                .map(this::copy)
-                .toList();
+        var query = Transaction.find(
+                "(sourceAccountId = ?1 OR destinationAccountId = ?1) AND CAST(dateTime AS DATE) = ?2",
+                Sort.by("dateTime").descending(),
+                accountId,
+                today
+        );
+        var result = query.page(Page.of(page, size));
+
+        return new PageResult<>(result.list(), page, size, result.count());
     }
 
     /**
@@ -86,21 +86,17 @@ public class TransactionService {
      * @return transação registrada.
      */
     public Transaction createDeposit(Long accountId, BigDecimal amount) {
-        long id = sequence.incrementAndGet();
-
-        Transaction transaction = new Transaction(
-                id,
-                TransactionType.DEPOSITO,
-                amount,
-                LocalDateTime.now(),
-                null,
-                accountId
-        );
+        Transaction transaction = new Transaction();
+        transaction.setType(TransactionType.DEPOSITO);
+        transaction.setAmount(amount);
+        transaction.setDateTime(LocalDateTime.now());
+        transaction.setSourceAccountId(null);
+        transaction.setDestinationAccountId(accountId);
 
         validateTransactionConsistency(transaction);
-        transactions.put(id, transaction);
+        transaction.persist();
 
-        return copy(transaction);
+        return transaction;
     }
 
     /**
@@ -111,21 +107,17 @@ public class TransactionService {
      * @return transação registrada.
      */
     public Transaction createWithdraw(Long accountId, BigDecimal amount) {
-        long id = sequence.incrementAndGet();
-
-        Transaction transaction = new Transaction(
-                id,
-                TransactionType.SAQUE,
-                amount,
-                LocalDateTime.now(),
-                accountId,
-                null
-        );
+        Transaction transaction = new Transaction();
+        transaction.setType(TransactionType.SAQUE);
+        transaction.setAmount(amount);
+        transaction.setDateTime(LocalDateTime.now());
+        transaction.setSourceAccountId(accountId);
+        transaction.setDestinationAccountId(null);
 
         validateTransactionConsistency(transaction);
-        transactions.put(id, transaction);
+        transaction.persist();
 
-        return copy(transaction);
+        return transaction;
     }
 
     /**
@@ -137,21 +129,17 @@ public class TransactionService {
      * @return transação registrada.
      */
     public Transaction createTransfer(Long sourceAccountId, Long destinationAccountId, BigDecimal amount) {
-        long id = sequence.incrementAndGet();
-
-        Transaction transaction = new Transaction(
-                id,
-                TransactionType.TRANSFERENCIA,
-                amount,
-                LocalDateTime.now(),
-                sourceAccountId,
-                destinationAccountId
-        );
+        Transaction transaction = new Transaction();
+        transaction.setType(TransactionType.TRANSFERENCIA);
+        transaction.setAmount(amount);
+        transaction.setDateTime(LocalDateTime.now());
+        transaction.setSourceAccountId(sourceAccountId);
+        transaction.setDestinationAccountId(destinationAccountId);
 
         validateTransactionConsistency(transaction);
-        transactions.put(id, transaction);
+        transaction.persist();
 
-        return copy(transaction);
+        return transaction;
     }
 
     /**
@@ -162,25 +150,13 @@ public class TransactionService {
      * @throws NotFoundException quando a transação não existe.
      */
     private Transaction getRequiredTransaction(Long id) {
-        Transaction transaction = transactions.get(id);
+        Transaction transaction = Transaction.findById(id);
 
         if (transaction == null) {
             throw new NotFoundException("Transação não encontrada");
         }
 
         return transaction;
-    }
-
-    /**
-     * Verifica se a transação está relacionada à conta informada.
-     *
-     * @param transaction transação analisada.
-     * @param accountId identificador da conta.
-     * @return true quando a conta participa da transação.
-     */
-    private boolean isRelatedToAccount(Transaction transaction, Long accountId) {
-        return (transaction.getSourceAccountId() != null && transaction.getSourceAccountId().equals(accountId))
-                || (transaction.getDestinationAccountId() != null && transaction.getDestinationAccountId().equals(accountId));
     }
 
     /**
@@ -199,42 +175,37 @@ public class TransactionService {
 
         if (type == TransactionType.DEPOSITO) {
             if (transaction.getSourceAccountId() != null) {
-                throw new BadRequestException("Transação do tipo DEPOSITO não deve possuir conta de origem");
+                throw new BadRequestException(
+                        "Transação do tipo DEPOSITO não deve possuir conta de origem"
+                );
             }
             if (transaction.getDestinationAccountId() == null) {
-                throw new BadRequestException("Transação do tipo DEPOSITO deve possuir conta de destino");
+                throw new BadRequestException(
+                        "Transação do tipo DEPOSITO deve possuir conta de destino"
+                );
             }
         } else if (type == TransactionType.SAQUE) {
             if (transaction.getSourceAccountId() == null) {
-                throw new BadRequestException("Transação do tipo SAQUE deve possuir conta de origem");
+                throw new BadRequestException(
+                        "Transação do tipo SAQUE deve possuir conta de origem"
+                );
             }
             if (transaction.getDestinationAccountId() != null) {
-                throw new BadRequestException("Transação do tipo SAQUE não deve possuir conta de destino");
+                throw new BadRequestException(
+                        "Transação do tipo SAQUE não deve possuir conta de destino"
+                );
             }
         } else if (type == TransactionType.TRANSFERENCIA) {
             if (transaction.getSourceAccountId() == null) {
-                throw new BadRequestException("Transação do tipo TRANSFERENCIA deve possuir conta de origem");
+                throw new BadRequestException(
+                        "Transação do tipo TRANSFERENCIA deve possuir conta de origem"
+                );
             }
             if (transaction.getDestinationAccountId() == null) {
-                throw new BadRequestException("Transação do tipo TRANSFERENCIA deve possuir conta de destino");
+                throw new BadRequestException(
+                        "Transação do tipo TRANSFERENCIA deve possuir conta de destino"
+                );
             }
         }
-    }
-
-    /**
-     * Cria uma cópia defensiva da transação.
-     *
-     * @param transaction transação original.
-     * @return cópia da transação.
-     */
-    private Transaction copy(Transaction transaction) {
-        return new Transaction(
-                transaction.getId(),
-                transaction.getType(),
-                transaction.getAmount(),
-                transaction.getDateTime(),
-                transaction.getSourceAccountId(),
-                transaction.getDestinationAccountId()
-        );
     }
 }

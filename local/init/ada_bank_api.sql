@@ -1,76 +1,86 @@
 -- ============================================================
--- Sistema Bancário — Script de Inicialização
--- Banco: banco_db
--- ============================================================
--- Senhas: todos os usuários têm a senha  ->  senha123
--- ============================================================
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+ -- Banking System — Initialization Script
+ -- Database: banco_db
+ -- ============================================================
+ -- Passwords: all users have password -> senha123
+ -- ============================================================
+ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
--- ------------------------------------------------------------
--- Tabelas
--- ------------------------------------------------------------
+ -- ------------------------------------------------------------
+ -- Tables
+ -- ------------------------------------------------------------
 
-CREATE TABLE IF NOT EXISTS customer (
-    id    		BIGSERIAL    PRIMARY KEY,
-    name  		VARCHAR(255) NOT NULL,
-    cpf   		VARCHAR(14)  NOT NULL UNIQUE,
-    email 		VARCHAR(255) NOT NULL UNIQUE,
-    password 	VARCHAR(255) NOT NULL,
-    role  		VARCHAR(20)  NOT NULL DEFAULT 'CLIENTE'
-    );
+ CREATE TABLE IF NOT EXISTS customer (
+     id            BIGSERIAL    PRIMARY KEY,
+     name          VARCHAR(255) NOT NULL,
+     cpf           VARCHAR(14)  NOT NULL UNIQUE,
+     email         VARCHAR(255) NOT NULL UNIQUE,
+     password     VARCHAR(255) NOT NULL,
+     role          VARCHAR(20)  NOT NULL DEFAULT 'CLIENTE'
+     );
 
-CREATE TABLE IF NOT EXISTS account (
-    id         			BIGSERIAL      PRIMARY KEY,
-    account_number     	VARCHAR(20)    NOT NULL UNIQUE,
-    type       			VARCHAR(20)    NOT NULL CHECK (type IN ('CORRENTE', 'POUPANCA', 'ELETRONICA')),
-    customer_id			BIGINT         NOT NULL REFERENCES customer(id)
-    );
+ CREATE TABLE IF NOT EXISTS account (
+     id                     BIGSERIAL      PRIMARY KEY,
+     account_number         VARCHAR(20)    NOT NULL UNIQUE,
+     type                   VARCHAR(20)    NOT NULL CHECK (type IN ('CORRENTE', 'POUPANCA', 'ELETRONICA')),
+     customer_id            BIGINT         NOT NULL REFERENCES customer(id)
+     );
 
-CREATE TABLE IF NOT EXISTS transaction (
-    id               		BIGSERIAL      PRIMARY KEY,
-    type             		VARCHAR(25)    NOT NULL CHECK (type IN ('DEPOSITO', 'SAQUE', 'TRANSFERENCIA')),
-    amount           		DECIMAL(15, 2) NOT NULL,
-    date_time         		TIMESTAMP      NOT NULL DEFAULT NOW(),
-    source_account_id		BIGINT         REFERENCES account(id),
-    destination_account_id	BIGINT         REFERENCES account(id)
-    );
+ CREATE TABLE IF NOT EXISTS transaction (
+     id                       BIGSERIAL      PRIMARY KEY,
+     type                     VARCHAR(25)    NOT NULL CHECK (type IN ('DEPOSITO', 'SAQUE', 'TRANSFERENCIA')),
+     amount                   DECIMAL(15, 2) NOT NULL,
+     date_time                 TIMESTAMP      NOT NULL DEFAULT NOW(),
+     source_account_id        BIGINT         REFERENCES account(id),
+     destination_account_id    BIGINT         REFERENCES account(id)
+     );
 
-CREATE OR REPLACE VIEW view_balance AS
-SELECT
-    c.id,
-    c.account_number,
-    c.type,
-    COALESCE(SUM(
-                     CASE
-                         WHEN t.type = 'DEPOSITO'      AND t.destination_account_id = c.id THEN  t.amount
-                         WHEN t.type = 'SAQUE'         AND t.source_account_id  = c.id THEN  t.amount   -- já negativo
-                         WHEN t.type = 'TRANSFERENCIA' AND t.destination_account_id = c.id THEN  t.amount   -- crédito
-                         WHEN t.type = 'TRANSFERENCIA' AND t.source_account_id  = c.id THEN -t.amount   -- débito
-                         ELSE 0
-                         END
-             ), 0) AS balance
-FROM account c
-         LEFT JOIN transaction t
-                   ON c.id = t.source_account_id
-                       OR c.id = t.destination_account_id
-GROUP BY c.id, c.account_number, c.type
-ORDER BY c.id;
+ CREATE OR REPLACE VIEW view_balance AS
+ SELECT
+     c.id,
+     c.account_number,
+     c.type,
+     COALESCE(SUM(
+                      CASE
+                          WHEN t.type = 'DEPOSITO'      AND t.destination_account_id = c.id THEN  t.amount
+                          WHEN t.type = 'SAQUE'         AND t.source_account_id  = c.id THEN  t.amount
+                          WHEN t.type = 'TRANSFERENCIA' AND t.destination_account_id = c.id THEN  t.amount
+                          WHEN t.type = 'TRANSFERENCIA' AND t.source_account_id  = c.id THEN -t.amount
+                          ELSE 0
+                          END
+              ), 0) AS balance
+ FROM account c
+          LEFT JOIN transaction t
+                    ON c.id = t.source_account_id
+                        OR c.id = t.destination_account_id
+ GROUP BY c.id, c.account_number, c.type
+ ORDER BY c.id;
+
+ -- ------------------------------------------------------------
+ -- Indexes
+ -- ------------------------------------------------------------
+
+ CREATE INDEX IF NOT EXISTS idx_account_customer            ON account     (customer_id);
+ CREATE INDEX IF NOT EXISTS idx_transaction_source         ON transaction (source_account_id);
+ CREATE INDEX IF NOT EXISTS idx_transaction_destination     ON transaction (destination_account_id);
+ CREATE INDEX IF NOT EXISTS idx_transaction_dateTime       ON transaction (date_time);
+ CREATE INDEX IF NOT EXISTS idx_transaction_type           ON transaction (type);
 
 -- ------------------------------------------------------------
 -- Índices
 -- ------------------------------------------------------------
 
-CREATE INDEX IF NOT EXISTS idx_account_customer    		ON account     (customer_id);
-CREATE INDEX IF NOT EXISTS idx_transaction_source     	ON transaction (source_account_id);
-CREATE INDEX IF NOT EXISTS idx_transaction_destination 	ON transaction (destination_account_id);
-CREATE INDEX IF NOT EXISTS idx_transaction_dateTime   	ON transaction (date_time);
-CREATE INDEX IF NOT EXISTS idx_transaction_type       	ON transaction (type);
+CREATE INDEX IF NOT EXISTS idx_conta_cliente    ON conta     (cliente_id);
+CREATE INDEX IF NOT EXISTS idx_trans_origem     ON transacao (conta_origem_id);
+CREATE INDEX IF NOT EXISTS idx_trans_destino    ON transacao (conta_destino_id);
+CREATE INDEX IF NOT EXISTS idx_trans_data_hora  ON transacao (data_hora);
+CREATE INDEX IF NOT EXISTS idx_trans_tipo       ON transacao (tipo);
 
 -- ------------------------------------------------------------
 -- Dados de exemplo
 -- ------------------------------------------------------------
 
-INSERT INTO customer (name, cpf, email, password, role)
+INSERT INTO cliente (nome, cpf, email, senha, role)
 VALUES
     ('Alice Silva', '000.000.000-01', 'alice.silva@bancada.com.br', crypt('senha123', gen_salt('bf', 10)), 'GERENTE'),
     ('Bob Santos', '000.000.000-02', 'bob.santos@bancada.com.br', crypt('senha123', gen_salt('bf', 10)), 'GERENTE'),
@@ -83,18 +93,18 @@ VALUES
     ('Igor Ribeiro', '000.000.000-09', 'igor.ribeiro@bancada.com.br', crypt('senha123', gen_salt('bf', 10)), 'CLIENTE'),
     ('Juliana Martins', '000.000.000-10', 'juliana.martins@bancada.com.br', crypt('senha123', gen_salt('bf', 10)), 'CLIENTE');
 
-INSERT INTO account ( account_number, type, customer_id)
+INSERT INTO conta (numero, tipo, cliente_id)
 VALUES
-    ('0001-1', 'CORRENTE', 3),
-    ('0002-2', 'POUPANCA', 4),
-    ('0003-3', 'ELETRONICA', 5),
-    ('0004-1', 'CORRENTE', 6),
-    ('0005-2', 'POUPANCA', 7),
+    ('0001-8', 'CORRENTE', 3),
+    ('0002-7', 'POUPANCA', 4),
+    ('0003-6', 'ELETRONICA', 5),
+    ('0004-5', 'CORRENTE', 6),
+    ('0005-4', 'POUPANCA', 7),
     ('0006-3', 'ELETRONICA', 8),
-    ('0007-1', 'CORRENTE', 9),
-    ('0008-2', 'POUPANCA', 10);
+    ('0007-2', 'CORRENTE', 9),
+    ('0008-1', 'POUPANCA', 10);
 
-INSERT INTO transaction (type, amount, date_time, source_account_id, destination_account_id)
+INSERT INTO transacao (tipo, valor, data_hora, conta_origem_id, conta_destino_id)
 VALUES
     -- Depósitos iniciais
     ('DEPOSITO', 500.00, NOW() - INTERVAL '10 day', NULL, 1),
@@ -401,13 +411,13 @@ VALUES
 -- Verificações
 -- ------------------------------------------------------------
 
-SELECT COUNT(*) FROM customer;
-SELECT COUNT(*) FROM account;
-SELECT type, COUNT(*) FROM account GROUP BY type ORDER BY type;
-SELECT COUNT(*) FROM transaction;
-SELECT type, COUNT(*) FROM transaction GROUP BY type ORDER BY type;
+SELECT COUNT(*) FROM cliente;
+SELECT COUNT(*) FROM conta;
+SELECT tipo, COUNT(*) FROM conta GROUP BY tipo ORDER BY tipo;
+SELECT COUNT(*) FROM transacao;
+SELECT tipo, COUNT(*) FROM transacao GROUP BY tipo ORDER BY tipo;
 
 -- ------------------------------------------------------------
 -- Consulta saldo das contas
 -- ------------------------------------------------------------
-SELECT * FROM view_balance;
+SELECT * FROM view_saldo;
