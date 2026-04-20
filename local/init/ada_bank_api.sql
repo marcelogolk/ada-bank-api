@@ -1,13 +1,13 @@
 -- ============================================================
- -- Banking System — Initialization Script
- -- Database: banco_db
+ -- Sistema Bancário ada-bank-api — Script de inicialização
+ -- Database: ada_bank_api
  -- ============================================================
- -- Passwords: all users have password -> senha123
+ -- Senhas: Todos os usuários possuem senha -> senha123
  -- ============================================================
  CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
  -- ------------------------------------------------------------
- -- Tables
+ -- Tabelas
  -- ------------------------------------------------------------
 
  CREATE TABLE IF NOT EXISTS customer (
@@ -57,7 +57,7 @@
  ORDER BY c.id;
 
  -- ------------------------------------------------------------
- -- Indexes
+ -- Índices
  -- ------------------------------------------------------------
 
  CREATE INDEX IF NOT EXISTS idx_account_customer            ON account     (customer_id);
@@ -67,20 +67,10 @@
  CREATE INDEX IF NOT EXISTS idx_transaction_type           ON transaction (type);
 
 -- ------------------------------------------------------------
--- Índices
--- ------------------------------------------------------------
-
-CREATE INDEX IF NOT EXISTS idx_conta_cliente    ON conta     (cliente_id);
-CREATE INDEX IF NOT EXISTS idx_trans_origem     ON transacao (conta_origem_id);
-CREATE INDEX IF NOT EXISTS idx_trans_destino    ON transacao (conta_destino_id);
-CREATE INDEX IF NOT EXISTS idx_trans_data_hora  ON transacao (data_hora);
-CREATE INDEX IF NOT EXISTS idx_trans_tipo       ON transacao (tipo);
-
--- ------------------------------------------------------------
 -- Dados de exemplo
 -- ------------------------------------------------------------
 
-INSERT INTO cliente (nome, cpf, email, senha, role)
+INSERT INTO customer (name, cpf, email, password, role)
 VALUES
     ('Alice Silva', '000.000.000-01', 'alice.silva@bancada.com.br', crypt('senha123', gen_salt('bf', 10)), 'GERENTE'),
     ('Bob Santos', '000.000.000-02', 'bob.santos@bancada.com.br', crypt('senha123', gen_salt('bf', 10)), 'GERENTE'),
@@ -93,7 +83,7 @@ VALUES
     ('Igor Ribeiro', '000.000.000-09', 'igor.ribeiro@bancada.com.br', crypt('senha123', gen_salt('bf', 10)), 'CLIENTE'),
     ('Juliana Martins', '000.000.000-10', 'juliana.martins@bancada.com.br', crypt('senha123', gen_salt('bf', 10)), 'CLIENTE');
 
-INSERT INTO conta (numero, tipo, cliente_id)
+INSERT INTO account (account_number, type, customer_id)
 VALUES
     ('0001-8', 'CORRENTE', 3),
     ('0002-7', 'POUPANCA', 4),
@@ -104,7 +94,7 @@ VALUES
     ('0007-2', 'CORRENTE', 9),
     ('0008-1', 'POUPANCA', 10);
 
-INSERT INTO transacao (tipo, valor, data_hora, conta_origem_id, conta_destino_id)
+INSERT INTO transaction (type, amount, date_time, source_account_id, destination_account_id)
 VALUES
     -- Depósitos iniciais
     ('DEPOSITO', 500.00, NOW() - INTERVAL '10 day', NULL, 1),
@@ -188,7 +178,7 @@ VALUES
     ('TRANSFERENCIA', 113.00, NOW() - INTERVAL '61 minute', 5, 6),
     ('TRANSFERENCIA', 126.00, NOW() - INTERVAL '62 minute', 6, 7),
     ('TRANSFERENCIA', 139.00, NOW() - INTERVAL '63 minute', 7, 8),
-    ('TRANSFERENCIA', 152.00, NOW() - INTERVAL '64 minute', 8, 1),
+    ('TRANSFERENCIA', 152.00transaction, NOW() - INTERVAL '64 minute', 8, 1),
     ('TRANSFERENCIA', 165.00, NOW() - INTERVAL '65 minute', 1, 2),
     ('TRANSFERENCIA', 178.00, NOW() - INTERVAL '66 minute', 2, 3),
     ('TRANSFERENCIA', 191.00, NOW() - INTERVAL '67 minute', 3, 4),
@@ -411,13 +401,13 @@ VALUES
 -- Verificações
 -- ------------------------------------------------------------
 
-SELECT COUNT(*) FROM cliente;
-SELECT COUNT(*) FROM conta;
-SELECT tipo, COUNT(*) FROM conta GROUP BY tipo ORDER BY tipo;
-SELECT COUNT(*) FROM transacao;
-SELECT tipo, COUNT(*) FROM transacao GROUP BY tipo ORDER BY tipo;
+SELECT COUNT(*) FROM customer;
+SELECT COUNT(*) FROM account;
+SELECT tipo, COUNT(*) FROM account GROUP BY type ORDER BY type;
+SELECT COUNT(*) FROM transaction;
+SELECT tipo, COUNT(*) FROM transaction GROUP BY type ORDER BY type;
 
 -- ------------------------------------------------------------
 -- Consulta saldo das contas
 -- ------------------------------------------------------------
-SELECT * FROM view_saldo;
+SELECT * FROM view_balance;
