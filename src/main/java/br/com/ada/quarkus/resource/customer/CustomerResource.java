@@ -1,30 +1,31 @@
 package br.com.ada.quarkus.resource.customer;
 
 import br.com.ada.quarkus.model.Customer;
+import br.com.ada.quarkus.model.LoggedUser;
+import br.com.ada.quarkus.resource.PageResponse;
+import br.com.ada.quarkus.service.CurrentUserService;
 import br.com.ada.quarkus.service.CustomerService;
+import jakarta.annotation.security.PermitAll;
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
-import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.GET;
-import jakarta.ws.rs.POST;
-import jakarta.ws.rs.PUT;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.PathParam;
-import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
 
 import java.net.URI;
-import java.util.List;
 
 /**
  * Recurso responsável pelos endpoints de clientes.
  *
  * <p>Recebe as requisições HTTP relacionadas ao cadastro,
- * consulta e atualização de clientes.</p>
+ * consulta e atualização de clientes com autenticação e paginação.</p>
+ *
+ * @author Marcelo
+ * @version 2.0
  */
 @Path("/clientes")
 @Consumes(MediaType.APPLICATION_JSON)
@@ -34,40 +35,62 @@ public class CustomerResource {
     @Inject
     CustomerService customerService;
 
+    @Inject
+    CurrentUserService currentUserService;
+
     /**
-     * Lista todos os clientes cadastrados.
+     * Lista todos os clientes cadastrados com paginação.
      *
-     * @return lista de clientes com dados públicos.
+     * <p>Endpoint público que retorna uma página de clientes
+     * ordenados por ID.</p>
+     *
+     * @param page Número da página (0-indexed). Padrão: 0
+     * @param size Quantidade de clientes por página. Padrão: 10
+     * @return página de clientes com dados públicos.
      */
     @GET
-    public List<CustomerResponse> list() {
-        return customerService.list().stream()
-                .map(this::toResponse)
-                .toList();
+    @PermitAll
+    public PageResponse<CustomerResponse> list(
+            @QueryParam("page") @DefaultValue("0") int page,
+            @QueryParam("size") @DefaultValue("10") int size) {
+        return PageResponse.from(
+                customerService.list(page, size),
+                this::toResponse
+        );
     }
 
     /**
      * Busca um cliente pelo id.
+     *
+     * <p>Endpoint público que retorna os dados públicos
+     * de um cliente específico.</p>
      *
      * @param id identificador do cliente.
      * @return dados públicos do cliente encontrado.
      */
     @GET
     @Path("/{id}")
+    @PermitAll
     public CustomerResponse findById(@PathParam("id") Long id) {
         return toResponse(customerService.findById(id));
     }
 
     /**
-     * Cadastra um novo cliente.
+     * Cadastra um novo cliente (signup).
      *
-     * @param request dados do cliente.
+     * <p>Endpoint público que permite o cadastro de novos clientes
+     * sem autenticação prévia.</p>
+     *
+     * @param request dados do cliente a ser criado.
      * @param uriInfo informações da URI da requisição.
      * @return resposta HTTP 201 com o cliente criado.
      */
     @POST
     @Transactional
-    public Response create(@Valid CreateCustomerRequest request, @Context UriInfo uriInfo) {
+    @PermitAll
+    public Response create(
+            @Valid CreateCustomerRequest request,
+            @Context UriInfo uriInfo) {
         Customer customer = customerService.create(toCustomer(request));
         CustomerResponse response = toResponse(customer);
 
@@ -83,15 +106,25 @@ public class CustomerResource {
     /**
      * Atualiza os dados permitidos de um cliente.
      *
-     * @param id identificador do cliente.
+     * <p>Apenas o próprio cliente ou um gerente podem atualizar
+     * os dados de um cliente. O CPF não pode ser alterado.</p>
+     *
+     * @param id identificador do cliente a atualizar.
      * @param request novos dados do cliente.
      * @return dados públicos do cliente atualizado.
+     * @throws ForbiddenException quando o usuário não tem permissão.
      */
     @PUT
     @Path("/{id}")
     @Transactional
-    public CustomerResponse update(@PathParam("id") Long id,
-                                   @Valid UpdateCustomerRequest request) {
+    @RolesAllowed({"GERENTE", "CLIENTE"})
+    public CustomerResponse update(
+            @PathParam("id") Long id,
+            @Valid UpdateCustomerRequest request) {
+
+        // Validar propriedade: apenas o próprio cliente ou gerente pode atualizar
+        validateOwnershipOrManager(id);
+
         Customer updatedCustomer = customerService.update(
                 id,
                 request.name(),
@@ -100,6 +133,31 @@ public class CustomerResource {
         );
 
         return toResponse(updatedCustomer);
+    }
+
+    /**
+     * Valida se o usuário logado é o proprietário da conta ou é gerente.
+     *
+     * <p>Gerentes podem atualizar qualquer cliente.
+     * Clientes só podem atualizar a si mesmos.</p>
+     *
+     * @param customerId ID do cliente a ser atualizado.
+     * @throws ForbiddenException quando o usuário não tem permissão.
+     */
+    private void validateOwnershipOrManager(Long customerId) {
+        LoggedUser currentUser = currentUserService.getLoggedUser();
+
+        // Gerente pode fazer qualquer coisa
+        if (currentUser.isManager()) {
+            return;
+        }
+
+        // Cliente só pode atualizar a si mesmo
+        if (!currentUser.id().equals(customerId)) {
+            throw new ForbiddenException(
+                    "Acesso negado: apenas o proprietário da conta ou um gerente pode realizar esta operação"
+            );
+        }
     }
 
     /**

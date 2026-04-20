@@ -62,9 +62,9 @@ public class AuthService implements CurrentUserService {
 
         return new LoggedUser(
                 getUserId(),
-                jwt.getName(),
-                jwt.getClaim("email"),
-                jwt.getClaim("cpf")
+                jwt.getName(),              // ← email (upn)
+                jwt.getClaim("cpf"),        // ← cpf
+                getRole()                   // ← role (groups)
         );
     }
 
@@ -75,6 +75,18 @@ public class AuthService implements CurrentUserService {
      */
     private Long getUserId() {
         return Long.parseLong(jwt.getClaim("userId").toString());
+    }
+
+    /**
+     * Extrai o papel do usuário a partir do token JWT.
+     *
+     * @return papel do usuário (GERENTE ou CLIENTE).
+     */
+    private String getRole() {
+        return jwt.getGroups()
+                .stream()
+                .findFirst()
+                .orElse("CLIENTE");
     }
 
     /**
@@ -131,9 +143,9 @@ public class AuthService implements CurrentUserService {
      */
     private String generateToken(Customer customer) {
         return Jwt.issuer(issuer)
-                .upn(customer.getEmail())
+                .upn(customer.getEmail())                    // ← email como upn
+                .groups(customer.getRole().getValue())       // ← role como groups
                 .claim("userId", customer.getId())
-                .claim("email", customer.getEmail())
                 .claim("cpf", customer.getCpf())
                 .expiresIn(Duration.ofMinutes(30))
                 .sign();

@@ -13,7 +13,7 @@ package br.com.ada.quarkus.model;
  * </p>
  *
  * @author Marcelo
- * @version 1.0
+ * @version 2.0
  */
 public record LoggedUser(
         /**
@@ -22,20 +22,20 @@ public record LoggedUser(
         Long id,
 
         /**
-         * Nome de usuário utilizado para login.
-         * Deve ser único no sistema.
+         * Email do usuário utilizado para login.
+         * Armazenado como upn (username principal) no JWT.
          */
-        String username,
+        String email,
 
         /**
-         * Nome completo do usuário para exibição.
+         * CPF do usuário para identificação.
          */
-        String name,
+        String cpf,
 
         /**
          * Papel/permissão do usuário no sistema.
-         * Valores possíveis: "MANAGER" (gerente) ou "CUSTOMER" (cliente).
-         * Armazenado como String para facilitar serialização no JWT Token.
+         * Valores possíveis: "GERENTE" ou "CLIENTE".
+         * Armazenado como grupos no JWT Token.
          */
         String role
 ) {
@@ -65,6 +65,4 @@ public record LoggedUser(
     public boolean isCustomer() {
         return "CLIENTE".equals(role);
     }
-
-
 }

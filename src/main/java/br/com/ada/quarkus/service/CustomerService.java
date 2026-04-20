@@ -60,11 +60,19 @@ public class CustomerService {
     public Customer findByEmail(String email) {
         String normalizedEmail = normalizeEmail(email);
 
-        return Customer.find("email", normalizedEmail).firstResultOptional()
+        return (Customer) Customer.find("email", normalizedEmail).firstResultOptional()
                 .orElseThrow(() -> new NotFoundException(
                         "Cliente com o email informado não foi encontrado"
                 ));
     }
+//    public Customer findByEmail(String email) {
+//        String normalizedEmail = normalizeEmail(email);
+//
+//        return (Customer) Customer.find("email = ?1", normalizedEmail).firstResultOptional()
+//                .orElseThrow(() -> new NotFoundException(
+//                        "Cliente com o email informado não foi encontrado"
+//                ));
+//    }
 
     /**
      * Cadastra um novo cliente após validar unicidade de CPF e email.

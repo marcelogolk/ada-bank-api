@@ -11,12 +11,13 @@
  -- ------------------------------------------------------------
 
  CREATE TABLE IF NOT EXISTS customer (
-     id            BIGSERIAL    PRIMARY KEY,
-     name          VARCHAR(255) NOT NULL,
-     cpf           VARCHAR(14)  NOT NULL UNIQUE,
-     email         VARCHAR(255) NOT NULL UNIQUE,
-     password     VARCHAR(255) NOT NULL,
-     role          VARCHAR(20)  NOT NULL DEFAULT 'CLIENTE'
+     id         BIGSERIAL    PRIMARY KEY,
+     name       VARCHAR(255) NOT NULL,
+     cpf        VARCHAR(14)  NOT NULL UNIQUE,
+     email      VARCHAR(255) NOT NULL UNIQUE,
+     password   VARCHAR(255) NOT NULL,
+     role       VARCHAR(20)  NOT NULL DEFAULT 'CLIENTE' CHECK (role IN ('GERENTE', 'CLIENTE')),
+     version    BIGINT       DEFAULT 0
      );
 
  CREATE TABLE IF NOT EXISTS account (
@@ -97,9 +98,9 @@ VALUES
 INSERT INTO transaction (type, amount, date_time, source_account_id, destination_account_id)
 VALUES
     -- Depósitos iniciais
-    ('DEPOSITO', 500.00, NOW() - INTERVAL '10 day', NULL, 1),
+    ('DEPOSITO', 1000.00, NOW() - INTERVAL '10 day', NULL, 1),
     ('DEPOSITO', 800.00, NOW() - INTERVAL '9 day', NULL, 2),
-    ('DEPOSITO', 450.00, NOW() - INTERVAL '8 day', NULL, 4),
+    ('DEPOSITO', 1450.00, NOW() - INTERVAL '8 day', NULL, 4),
     ('DEPOSITO', 900.00, NOW() - INTERVAL '7 day', NULL, 5),
     ('DEPOSITO', 700.00, NOW() - INTERVAL '6 day', NULL, 7),
     ('DEPOSITO', 300.00, NOW() - INTERVAL '5 day', NULL, 8),
@@ -178,7 +179,7 @@ VALUES
     ('TRANSFERENCIA', 113.00, NOW() - INTERVAL '61 minute', 5, 6),
     ('TRANSFERENCIA', 126.00, NOW() - INTERVAL '62 minute', 6, 7),
     ('TRANSFERENCIA', 139.00, NOW() - INTERVAL '63 minute', 7, 8),
-    ('TRANSFERENCIA', 152.00transaction, NOW() - INTERVAL '64 minute', 8, 1),
+    ('TRANSFERENCIA', 152.00, NOW() - INTERVAL '64 minute', 8, 1),
     ('TRANSFERENCIA', 165.00, NOW() - INTERVAL '65 minute', 1, 2),
     ('TRANSFERENCIA', 178.00, NOW() - INTERVAL '66 minute', 2, 3),
     ('TRANSFERENCIA', 191.00, NOW() - INTERVAL '67 minute', 3, 4),
@@ -403,9 +404,9 @@ VALUES
 
 SELECT COUNT(*) FROM customer;
 SELECT COUNT(*) FROM account;
-SELECT tipo, COUNT(*) FROM account GROUP BY type ORDER BY type;
+SELECT type, COUNT(*) FROM account GROUP BY type ORDER BY type;
 SELECT COUNT(*) FROM transaction;
-SELECT tipo, COUNT(*) FROM transaction GROUP BY type ORDER BY type;
+SELECT type, COUNT(*) FROM transaction GROUP BY type ORDER BY type;
 
 -- ------------------------------------------------------------
 -- Consulta saldo das contas

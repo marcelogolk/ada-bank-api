@@ -2,10 +2,7 @@ package br.com.ada.quarkus.model;
 
 import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
 import jakarta.persistence.*;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.*;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.util.Objects;
 
@@ -79,6 +76,17 @@ public class Customer extends PanacheEntityBase {
      * Incrementado automaticamente a cada atualização pelo Hibernate.
      * Previne conflitos em operações concorrentes.
      */
+
+    /**
+     * Papel/permissão do cliente no sistema.
+     * Valores: GERENTE ou CLIENTE.
+     */
+    @NotNull(message = "O papel do cliente é obrigatório")
+    //@Enumerated(EnumType.STRING)
+    @Column(name = "role", nullable = false)
+    @Convert(converter = UserRoleConverter.class)
+    private UserRole role;
+
     @Version
     private Long version;
 
@@ -147,6 +155,14 @@ public class Customer extends PanacheEntityBase {
     /** @param email O novo e-mail do cliente. */
     public void setEmail(String email) {
         this.email = email;
+    }
+    /** @return  Papel/permissão do cliente no sistema */
+    public UserRole getRole() {
+        return role;
+    }
+    /** @param role Papel/permissão do cliente no sistema. */
+    public void setRole(UserRole role) {
+        this.role = role;
     }
 
     /**
