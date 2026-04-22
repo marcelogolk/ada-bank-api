@@ -51,6 +51,7 @@ public class Account extends PanacheEntityBase {
      * Campo obrigatório e mapeado para a coluna "type" do banco.
      */
     @NotNull(message = "O tipo da conta é obrigatório")
+    @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false, length = 20)
     private AccountType type;
 
@@ -82,7 +83,7 @@ public class Account extends PanacheEntityBase {
             "WHEN t.type = 'TRANSFERENCIA' AND t.destination_account_id = id THEN t.amount " +
             "WHEN t.type = 'TRANSFERENCIA' AND t.source_account_id = id THEN -t.amount " +
             "ELSE 0 END" +
-            "), 0) FROM transaction t WHERE t.source_account_id = id OR t.destination_account_id = id)")
+            "), 0) FROM bank_transaction t WHERE t.source_account_id = id OR t.destination_account_id = id)")
     private BigDecimal balance;
 
     /**
@@ -176,17 +177,6 @@ public class Account extends PanacheEntityBase {
         }
         return 9 - (soma % 10);
     }
-
-    /**
-     * Retorna o número completo da conta (base + dígito verificador).
-     * Este é o número que deve ser exibido ao cliente.
-     *
-     * @return Número completo com 5 dígitos (ex: "00010").
-     */
-    public String getFullAccountNumber() {
-        return accountNumber + calculateCheckDigit();
-    }
-
 
     // ========== Métodos Object ==========
 

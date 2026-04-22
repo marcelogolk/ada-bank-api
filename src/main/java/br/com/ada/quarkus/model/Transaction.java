@@ -24,7 +24,7 @@ import java.util.Objects;
  * @version 1.0
  */
 @Entity
-@Table(name = "transaction")
+@Table(name = "bank_transaction")
 public class Transaction extends PanacheEntityBase {
 
     /**
@@ -42,6 +42,7 @@ public class Transaction extends PanacheEntityBase {
      * Campo obrigatório e mapeado para a coluna "type" do banco.
      */
     @NotNull(message = "O tipo da transação é obrigatório")
+    @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false, length = 25)
     private TransactionType type;
 

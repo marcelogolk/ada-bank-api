@@ -1,71 +1,76 @@
 -- ============================================================
- -- Sistema Bancário ada-bank-api — Script de inicialização
- -- Database: ada_bank_api
- -- ============================================================
- -- Senhas: Todos os usuários possuem senha -> senha123
- -- ============================================================
- CREATE EXTENSION IF NOT EXISTS pgcrypto;
+-- Sistema Bancário — Script de Inicialização
+-- Banco: ada_bank_api
+-- ============================================================
+-- Senhas: todos os usuários têm a senha  ->  senha123
+-- ============================================================
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
- -- ------------------------------------------------------------
- -- Tabelas
- -- ------------------------------------------------------------
+DROP VIEW IF EXISTS view_saldo CASCADE;
 
- CREATE TABLE IF NOT EXISTS customer (
-     id         BIGSERIAL    PRIMARY KEY,
-     name       VARCHAR(255) NOT NULL,
-     cpf        VARCHAR(14)  NOT NULL UNIQUE,
-     email      VARCHAR(255) NOT NULL UNIQUE,
-     password   VARCHAR(255) NOT NULL,
-     role       VARCHAR(20)  NOT NULL DEFAULT 'CLIENTE' CHECK (role IN ('GERENTE', 'CLIENTE')),
-     version    BIGINT       DEFAULT 0
-     );
+DROP TABLE IF EXISTS bank_transaction CASCADE;
+DROP TABLE IF EXISTS account CASCADE;
+DROP TABLE IF EXISTS customer CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+-- ------------------------------------------------------------
+-- Tabelas
+-- ------------------------------------------------------------
 
- CREATE TABLE IF NOT EXISTS account (
-     id                     BIGSERIAL      PRIMARY KEY,
-     account_number         VARCHAR(20)    NOT NULL UNIQUE,
-     type                   VARCHAR(20)    NOT NULL CHECK (type IN ('CORRENTE', 'POUPANCA', 'ELETRONICA')),
-     customer_id            BIGINT         NOT NULL REFERENCES customer(id)
-     );
+CREATE TABLE IF NOT EXISTS customer (
+    id    		BIGSERIAL    PRIMARY KEY,
+    name  		VARCHAR(255) NOT NULL,
+    cpf   		VARCHAR(14)  NOT NULL UNIQUE,
+    email 		VARCHAR(255) NOT NULL UNIQUE,
+    password 	VARCHAR(255) NOT NULL,
+	role       	VARCHAR(20)  NOT NULL DEFAULT 'CLIENTE' CHECK (role IN ('GERENTE', 'CLIENTE')),
+	version    	BIGINT       DEFAULT 0
+    );
 
- CREATE TABLE IF NOT EXISTS transaction (
-     id                       BIGSERIAL      PRIMARY KEY,
-     type                     VARCHAR(25)    NOT NULL CHECK (type IN ('DEPOSITO', 'SAQUE', 'TRANSFERENCIA')),
-     amount                   DECIMAL(15, 2) NOT NULL,
-     date_time                 TIMESTAMP      NOT NULL DEFAULT NOW(),
-     source_account_id        BIGINT         REFERENCES account(id),
-     destination_account_id    BIGINT         REFERENCES account(id)
-     );
+CREATE TABLE IF NOT EXISTS account (
+    id         		BIGSERIAL      PRIMARY KEY,
+    account_number  VARCHAR(20)    NOT NULL UNIQUE,
+    type       		VARCHAR(20)    NOT NULL CHECK (type IN ('CORRENTE', 'POUPANCA', 'ELETRONICA')),
+    customer_id 	BIGINT         NOT NULL REFERENCES customer(id)
+    );
 
- CREATE OR REPLACE VIEW view_balance AS
- SELECT
-     c.id,
-     c.account_number,
-     c.type,
-     COALESCE(SUM(
-                      CASE
-                          WHEN t.type = 'DEPOSITO'      AND t.destination_account_id = c.id THEN  t.amount
-                          WHEN t.type = 'SAQUE'         AND t.source_account_id  = c.id THEN  t.amount
-                          WHEN t.type = 'TRANSFERENCIA' AND t.destination_account_id = c.id THEN  t.amount
-                          WHEN t.type = 'TRANSFERENCIA' AND t.source_account_id  = c.id THEN -t.amount
-                          ELSE 0
-                          END
-              ), 0) AS balance
- FROM account c
-          LEFT JOIN transaction t
-                    ON c.id = t.source_account_id
-                        OR c.id = t.destination_account_id
- GROUP BY c.id, c.account_number, c.type
- ORDER BY c.id;
+CREATE TABLE IF NOT EXISTS bank_transaction (
+    id               		BIGSERIAL      PRIMARY KEY,
+    type             		VARCHAR(25)    NOT NULL CHECK (type IN ('DEPOSITO', 'SAQUE', 'TRANSFERENCIA')),
+    amount            		DECIMAL(15, 2) NOT NULL,
+    date_time        		TIMESTAMP      NOT NULL DEFAULT NOW(),
+    source_account_id  		BIGINT         REFERENCES account(id),
+    destination_account_id 	BIGINT         REFERENCES account(id)
+    );
+CREATE OR REPLACE VIEW view_saldo AS
+SELECT
+    a.id,
+    a.account_number,
+    a.type,
+    COALESCE(SUM(
+        CASE
+            WHEN t.type = 'DEPOSITO' AND t.destination_account_id = a.id THEN t.amount
+            WHEN t.type = 'SAQUE' AND t.source_account_id = a.id THEN -t.amount
+            WHEN t.type = 'TRANSFERENCIA' AND t.destination_account_id = a.id THEN t.amount
+            WHEN t.type = 'TRANSFERENCIA' AND t.source_account_id = a.id THEN -t.amount
+            ELSE 0
+        END
+    ), 0) AS balance
+FROM account a
+LEFT JOIN bank_transaction t
+    ON a.id = t.source_account_id
+    OR a.id = t.destination_account_id
+GROUP BY a.id, a.account_number, a.type
+ORDER BY a.id;
 
- -- ------------------------------------------------------------
- -- Índices
- -- ------------------------------------------------------------
+-- ------------------------------------------------------------
+-- Índices
+-- ------------------------------------------------------------
 
- CREATE INDEX IF NOT EXISTS idx_account_customer            ON account     (customer_id);
- CREATE INDEX IF NOT EXISTS idx_transaction_source         ON transaction (source_account_id);
- CREATE INDEX IF NOT EXISTS idx_transaction_destination     ON transaction (destination_account_id);
- CREATE INDEX IF NOT EXISTS idx_transaction_dateTime       ON transaction (date_time);
- CREATE INDEX IF NOT EXISTS idx_transaction_type           ON transaction (type);
+CREATE INDEX IF NOT EXISTS idx_account_customer 	ON account   	(customer_id);
+CREATE INDEX IF NOT EXISTS idx_trans_source     	ON bank_transaction 	(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_trans_destination    ON bank_transaction 	(destination_account_id);
+CREATE INDEX IF NOT EXISTS idx_trans_date_time  	ON bank_transaction 	(date_time);
+CREATE INDEX IF NOT EXISTS idx_trans_type       	ON bank_transaction 	(type);
 
 -- ------------------------------------------------------------
 -- Dados de exemplo
@@ -73,42 +78,42 @@
 
 INSERT INTO customer (name, cpf, email, password, role)
 VALUES
-    ('Alice Silva', '000.000.000-01', 'alice.silva@bancada.com.br', crypt('senha123', gen_salt('bf', 10)), 'GERENTE'),
-    ('Bob Santos', '000.000.000-02', 'bob.santos@bancada.com.br', crypt('senha123', gen_salt('bf', 10)), 'GERENTE'),
-    ('Carlos Oliveira', '000.000.000-03', 'carlos.oliveira@bancada.com.br', crypt('senha123', gen_salt('bf', 10)), 'CLIENTE'),
-    ('Diana Souza', '000.000.000-04', 'diana.souza@bancada.com.br', crypt('senha123', gen_salt('bf', 10)), 'CLIENTE'),
-    ('Eduardo Ferreira', '000.000.000-05', 'eduardo.ferreira@bancada.com.br', crypt('senha123', gen_salt('bf', 10)), 'CLIENTE'),
-    ('Fernanda Lima', '000.000.000-06', 'fernanda.lima@bancada.com.br', crypt('senha123', gen_salt('bf', 10)), 'CLIENTE'),
-    ('Gabriel Gomes', '000.000.000-07', 'gabriel.gomes@bancada.com.br', crypt('senha123', gen_salt('bf', 10)), 'CLIENTE'),
-    ('Helena Costa', '000.000.000-08', 'helena.costa@bancada.com.br', crypt('senha123', gen_salt('bf', 10)), 'CLIENTE'),
-    ('Igor Ribeiro', '000.000.000-09', 'igor.ribeiro@bancada.com.br', crypt('senha123', gen_salt('bf', 10)), 'CLIENTE'),
-    ('Juliana Martins', '000.000.000-10', 'juliana.martins@bancada.com.br', crypt('senha123', gen_salt('bf', 10)), 'CLIENTE');
+    ('Alice Silva', '00000000001', 'alice.silva@bancada.com.br', '$argon2id$v=19$m=65536,t=3,p=4$wwnDzatVCvv+lTpxtmKuAA$heZ3gWTqRNLKf6qJEJ4yPBtZ8cKBIqJ5HPPLjmYPN70', 'GERENTE'),
+    ('Bob Santos', '00000000002', 'bob.santos@bancada.com.br', '$argon2id$v=19$m=65536,t=3,p=1$YWJjMTIzNDU2$0rZ9yqYpY7yUQqkYkqJ9YqJ8l1YQkYqZq8xYqZyYkqA', 'GERENTE'),
+    ('Carlos Oliveira', '00000000003', 'carlos.oliveira@bancada.com.br', '$argon2id$v=19$m=65536,t=3,p=4$UqyaNjY5pF/M0QoMjp+D7Q$wbbDMbxoG3Q4yV2aSCjtEiAyI1UYeISP0ALHzTQbU4o', 'CLIENTE'),
+    ('Diana Souza', '00000000004', 'diana.souza@bancada.com.br', '$argon2id$v=19$m=65536,t=3,p=4$wwnDzatVCvv+lTpxtmKuAA$heZ3gWTqRNLKf6qJEJ4yPBtZ8cKBIqJ5HPPLjmYPN70', 'CLIENTE'),
+    ('Eduardo Ferreira', '00000000005', 'eduardo.ferreira@bancada.com.br', '$argon2id$v=19$m=65536,t=3,p=1$YWJjMTIzNDU2$0rZ9yqYpY7yUQqkYkqJ9YqJ8l1YQkYqZq8xYqZyYkqA', 'CLIENTE'),
+    ('Fernanda Lima', '00000000006', 'fernanda.lima@bancada.com.br', '$argon2id$v=19$m=65536,t=3,p=1$ZGVmNzg5MDEy$yX7kQqZ8l2YQpYqZk8YqJ7l2YQkYqZq8xYqZyYkqB', 'CLIENTE'),
+    ('Gabriel Gomes', '00000000007', 'gabriel.gomes@bancada.com.br', '$argon2id$v=19$m=65536,t=3,p=1$YWJjMTIzNDU2$0rZ9yqYpY7yUQqkYkqJ9YqJ8l1YQkYqZq8xYqZyYkqA', 'CLIENTE'),
+    ('Helena Costa', '00000000008', 'helena.costa@bancada.com.br','$argon2id$v=19$m=65536,t=3,p=4$wwnDzatVCvv+lTpxtmKuAA$heZ3gWTqRNLKf6qJEJ4yPBtZ8cKBIqJ5HPPLjmYPN70', 'CLIENTE'),
+    ('Igor Ribeiro', '00000000009', 'igor.ribeiro@bancada.com.br', '$argon2id$v=19$m=65536,t=3,p=1$YWJjMTIzNDU2$0rZ9yqYpY7yUQqkYkqJ9YqJ8l1YQkYqZq8xYqZyYkqA', 'CLIENTE'),
+    ('Juliana Martins', '00000000010', 'juliana.martins@bancada.com.br', '$argon2id$v=19$m=65536,t=3,p=1$ZGVmNzg5MDEy$yX7kQqZ8l2YQpYqZk8YqJ7l2YQkYqZq8xYqZyYkqB', 'CLIENTE');
 
 INSERT INTO account (account_number, type, customer_id)
 VALUES
-    ('0001-8', 'CORRENTE', 3),
-    ('0002-7', 'POUPANCA', 4),
-    ('0003-6', 'ELETRONICA', 5),
-    ('0004-5', 'CORRENTE', 6),
-    ('0005-4', 'POUPANCA', 7),
-    ('0006-3', 'ELETRONICA', 8),
-    ('0007-2', 'CORRENTE', 9),
-    ('0008-1', 'POUPANCA', 10);
+    ('0000000018', 'CORRENTE', 3),
+    ('0000000027', 'POUPANCA', 4),
+    ('0000000036', 'ELETRONICA', 5),
+    ('0000000045', 'CORRENTE', 6),
+    ('0000000054', 'POUPANCA', 7),
+    ('0000000063', 'ELETRONICA', 8),
+    ('0000000072', 'CORRENTE', 9),
+    ('0000000081', 'POUPANCA', 10);
 
-INSERT INTO transaction (type, amount, date_time, source_account_id, destination_account_id)
+INSERT INTO bank_transaction (type, amount, date_time, source_account_id, destination_account_id)
 VALUES
     -- Depósitos iniciais
-    ('DEPOSITO', 1000.00, NOW() - INTERVAL '10 day', NULL, 1),
+    ('DEPOSITO', 1500.00, NOW() - INTERVAL '10 day', NULL, 1),
     ('DEPOSITO', 800.00, NOW() - INTERVAL '9 day', NULL, 2),
     ('DEPOSITO', 1450.00, NOW() - INTERVAL '8 day', NULL, 4),
     ('DEPOSITO', 900.00, NOW() - INTERVAL '7 day', NULL, 5),
     ('DEPOSITO', 700.00, NOW() - INTERVAL '6 day', NULL, 7),
     ('DEPOSITO', 300.00, NOW() - INTERVAL '5 day', NULL, 8),
     -- Saques iniciais
-    ('SAQUE', -120.00, NOW() - INTERVAL '4 day', 1, NULL),
-    ('SAQUE', -80.00, NOW() - INTERVAL '3 day', 2, NULL),
-    ('SAQUE', -60.00, NOW() - INTERVAL '2 day', 4, NULL),
-    ('SAQUE', -150.00, NOW() - INTERVAL '1 day', 5, NULL),
+    ('SAQUE', 120.00, NOW() - INTERVAL '4 day', 1, NULL),
+    ('SAQUE', 80.00, NOW() - INTERVAL '3 day', 2, NULL),
+    ('SAQUE', 60.00, NOW() - INTERVAL '2 day', 4, NULL),
+    ('SAQUE', 150.00, NOW() - INTERVAL '1 day', 5, NULL),
     -- Transferências (valor positivo, de conta_origem → conta_destino)
     ('TRANSFERENCIA', 200.00, NOW() - INTERVAL '20 hour', 1, 2),
     ('TRANSFERENCIA', 90.00, NOW() - INTERVAL '18 hour', 2, 3),
@@ -318,85 +323,85 @@ VALUES
     ('TRANSFERENCIA', 170.00, NOW() - INTERVAL '200 minute', 8, 1),
     -- Depósitos e saques adicionais
     ('DEPOSITO', 47.00, NOW() - INTERVAL '201 minute', NULL, 1),
-    ('SAQUE', -64.00, NOW() - INTERVAL '202 minute', 2, NULL),
+    ('SAQUE', 64.00, NOW() - INTERVAL '202 minute', 2, NULL),
     ('DEPOSITO', 81.00, NOW() - INTERVAL '203 minute', NULL, 4),
     ('DEPOSITO', 115.00, NOW() - INTERVAL '205 minute', NULL, 7),
-    ('SAQUE', -132.00, NOW() - INTERVAL '206 minute', 1, NULL),
+    ('SAQUE', 132.00, NOW() - INTERVAL '206 minute', 1, NULL),
     ('DEPOSITO', 149.00, NOW() - INTERVAL '207 minute', NULL, 2),
-    ('SAQUE', -166.00, NOW() - INTERVAL '208 minute', 4, NULL),
-    ('SAQUE', -200.00, NOW() - INTERVAL '210 minute', 7, NULL),
+    ('SAQUE', 166.00, NOW() - INTERVAL '208 minute', 4, NULL),
+    ('SAQUE', 200.00, NOW() - INTERVAL '210 minute', 7, NULL),
     ('DEPOSITO', 217.00, NOW() - INTERVAL '211 minute', NULL, 1),
-    ('SAQUE', -234.00, NOW() - INTERVAL '212 minute', 2, NULL),
+    ('SAQUE', 234.00, NOW() - INTERVAL '212 minute', 2, NULL),
     ('DEPOSITO', 251.00, NOW() - INTERVAL '213 minute', NULL, 4),
     ('DEPOSITO', 285.00, NOW() - INTERVAL '215 minute', NULL, 7),
-    ('SAQUE', -302.00, NOW() - INTERVAL '216 minute', 1, NULL),
+    ('SAQUE', 302.00, NOW() - INTERVAL '216 minute', 1, NULL),
     ('DEPOSITO', 319.00, NOW() - INTERVAL '217 minute', NULL, 2),
-    ('SAQUE', -336.00, NOW() - INTERVAL '218 minute', 4, NULL),
-    ('SAQUE', -370.00, NOW() - INTERVAL '220 minute', 7, NULL),
+    ('SAQUE', 336.00, NOW() - INTERVAL '218 minute', 4, NULL),
+    ('SAQUE', 370.00, NOW() - INTERVAL '220 minute', 7, NULL),
     ('DEPOSITO', 387.00, NOW() - INTERVAL '221 minute', NULL, 1),
-    ('SAQUE', -404.00, NOW() - INTERVAL '222 minute', 2, NULL),
+    ('SAQUE', 404.00, NOW() - INTERVAL '222 minute', 2, NULL),
     ('DEPOSITO', 421.00, NOW() - INTERVAL '223 minute', NULL, 4),
     ('DEPOSITO', 455.00, NOW() - INTERVAL '225 minute', NULL, 7),
-    ('SAQUE', -472.00, NOW() - INTERVAL '226 minute', 1, NULL),
+    ('SAQUE', 472.00, NOW() - INTERVAL '226 minute', 1, NULL),
     ('DEPOSITO', 489.00, NOW() - INTERVAL '227 minute', NULL, 2),
-    ('SAQUE', -506.00, NOW() - INTERVAL '228 minute', 4, NULL),
-    ('SAQUE', -40.00, NOW() - INTERVAL '230 minute', 7, NULL),
+    ('SAQUE', 506.00, NOW() - INTERVAL '228 minute', 4, NULL),
+    ('SAQUE', 40.00, NOW() - INTERVAL '230 minute', 7, NULL),
     ('DEPOSITO', 57.00, NOW() - INTERVAL '231 minute', NULL, 1),
-    ('SAQUE', -74.00, NOW() - INTERVAL '232 minute', 2, NULL),
+    ('SAQUE', 74.00, NOW() - INTERVAL '232 minute', 2, NULL),
     ('DEPOSITO', 91.00, NOW() - INTERVAL '233 minute', NULL, 4),
     ('DEPOSITO', 125.00, NOW() - INTERVAL '235 minute', NULL, 7),
-    ('SAQUE', -142.00, NOW() - INTERVAL '236 minute', 1, NULL),
+    ('SAQUE', 142.00, NOW() - INTERVAL '236 minute', 1, NULL),
     ('DEPOSITO', 159.00, NOW() - INTERVAL '237 minute', NULL, 2),
-    ('SAQUE', -176.00, NOW() - INTERVAL '238 minute', 4, NULL),
-    ('SAQUE', -210.00, NOW() - INTERVAL '240 minute', 7, NULL),
+    ('SAQUE', 176.00, NOW() - INTERVAL '238 minute', 4, NULL),
+    ('SAQUE', 210.00, NOW() - INTERVAL '240 minute', 7, NULL),
     ('DEPOSITO', 227.00, NOW() - INTERVAL '241 minute', NULL, 1),
-    ('SAQUE', -244.00, NOW() - INTERVAL '242 minute', 2, NULL),
+    ('SAQUE', 244.00, NOW() - INTERVAL '242 minute', 2, NULL),
     ('DEPOSITO', 261.00, NOW() - INTERVAL '243 minute', NULL, 4),
     ('DEPOSITO', 295.00, NOW() - INTERVAL '245 minute', NULL, 7),
-    ('SAQUE', -312.00, NOW() - INTERVAL '246 minute', 1, NULL),
+    ('SAQUE', 312.00, NOW() - INTERVAL '246 minute', 1, NULL),
     ('DEPOSITO', 329.00, NOW() - INTERVAL '247 minute', NULL, 2),
-    ('SAQUE', -346.00, NOW() - INTERVAL '248 minute', 4, NULL),
-    ('SAQUE', -380.00, NOW() - INTERVAL '250 minute', 7, NULL),
+    ('SAQUE', 346.00, NOW() - INTERVAL '248 minute', 4, NULL),
+    ('SAQUE', 380.00, NOW() - INTERVAL '250 minute', 7, NULL),
     ('DEPOSITO', 397.00, NOW() - INTERVAL '251 minute', NULL, 1),
-    ('SAQUE', -414.00, NOW() - INTERVAL '252 minute', 2, NULL),
+    ('SAQUE', 414.00, NOW() - INTERVAL '252 minute', 2, NULL),
     ('DEPOSITO', 431.00, NOW() - INTERVAL '253 minute', NULL, 4),
     ('DEPOSITO', 465.00, NOW() - INTERVAL '255 minute', NULL, 7),
-    ('SAQUE', -482.00, NOW() - INTERVAL '256 minute', 1, NULL),
+    ('SAQUE', 482.00, NOW() - INTERVAL '256 minute', 1, NULL),
     ('DEPOSITO', 499.00, NOW() - INTERVAL '257 minute', NULL, 2),
-    ('SAQUE', -516.00, NOW() - INTERVAL '258 minute', 4, NULL),
-    ('SAQUE', -50.00, NOW() - INTERVAL '260 minute', 7, NULL),
+    ('SAQUE', 516.00, NOW() - INTERVAL '258 minute', 4, NULL),
+    ('SAQUE', 50.00, NOW() - INTERVAL '260 minute', 7, NULL),
     ('DEPOSITO', 67.00, NOW() - INTERVAL '261 minute', NULL, 1),
-    ('SAQUE', -84.00, NOW() - INTERVAL '262 minute', 2, NULL),
+    ('SAQUE', 84.00, NOW() - INTERVAL '262 minute', 2, NULL),
     ('DEPOSITO', 101.00, NOW() - INTERVAL '263 minute', NULL, 4),
     ('DEPOSITO', 135.00, NOW() - INTERVAL '265 minute', NULL, 7),
-    ('SAQUE', -152.00, NOW() - INTERVAL '266 minute', 1, NULL),
+    ('SAQUE', 152.00, NOW() - INTERVAL '266 minute', 1, NULL),
     ('DEPOSITO', 169.00, NOW() - INTERVAL '267 minute', NULL, 2),
-    ('SAQUE', -186.00, NOW() - INTERVAL '268 minute', 4, NULL),
-    ('SAQUE', -220.00, NOW() - INTERVAL '270 minute', 7, NULL),
+    ('SAQUE', 186.00, NOW() - INTERVAL '268 minute', 4, NULL),
+    ('SAQUE', 220.00, NOW() - INTERVAL '270 minute', 7, NULL),
     ('DEPOSITO', 237.00, NOW() - INTERVAL '271 minute', NULL, 1),
-    ('SAQUE', -254.00, NOW() - INTERVAL '272 minute', 2, NULL),
+    ('SAQUE', 254.00, NOW() - INTERVAL '272 minute', 2, NULL),
     ('DEPOSITO', 271.00, NOW() - INTERVAL '273 minute', NULL, 4),
     ('DEPOSITO', 305.00, NOW() - INTERVAL '275 minute', NULL, 7),
-    ('SAQUE', -322.00, NOW() - INTERVAL '276 minute', 1, NULL),
+    ('SAQUE', 322.00, NOW() - INTERVAL '276 minute', 1, NULL),
     ('DEPOSITO', 339.00, NOW() - INTERVAL '277 minute', NULL, 2),
-    ('SAQUE', -356.00, NOW() - INTERVAL '278 minute', 4, NULL),
-    ('SAQUE', -390.00, NOW() - INTERVAL '280 minute', 7, NULL),
+    ('SAQUE', 356.00, NOW() - INTERVAL '278 minute', 4, NULL),
+    ('SAQUE', 390.00, NOW() - INTERVAL '280 minute', 7, NULL),
     ('DEPOSITO', 407.00, NOW() - INTERVAL '281 minute', NULL, 1),
-    ('SAQUE', -424.00, NOW() - INTERVAL '282 minute', 2, NULL),
+    ('SAQUE', 424.00, NOW() - INTERVAL '282 minute', 2, NULL),
     ('DEPOSITO', 441.00, NOW() - INTERVAL '283 minute', NULL, 4),
     ('DEPOSITO', 475.00, NOW() - INTERVAL '285 minute', NULL, 7),
-    ('SAQUE', -492.00, NOW() - INTERVAL '286 minute', 1, NULL),
+    ('SAQUE', 492.00, NOW() - INTERVAL '286 minute', 1, NULL),
     ('DEPOSITO', 509.00, NOW() - INTERVAL '287 minute', NULL, 2),
-    ('SAQUE', -526.00, NOW() - INTERVAL '288 minute', 4, NULL),
-    ('SAQUE', -60.00, NOW() - INTERVAL '290 minute', 7, NULL),
+    ('SAQUE', 526.00, NOW() - INTERVAL '288 minute', 4, NULL),
+    ('SAQUE', 60.00, NOW() - INTERVAL '290 minute', 7, NULL),
     ('DEPOSITO', 77.00, NOW() - INTERVAL '291 minute', NULL, 1),
-    ('SAQUE', -94.00, NOW() - INTERVAL '292 minute', 2, NULL),
+    ('SAQUE', 94.00, NOW() - INTERVAL '292 minute', 2, NULL),
     ('DEPOSITO', 111.00, NOW() - INTERVAL '293 minute', NULL, 4),
     ('DEPOSITO', 145.00, NOW() - INTERVAL '295 minute', NULL, 7),
-    ('SAQUE', -162.00, NOW() - INTERVAL '296 minute', 1, NULL),
+    ('SAQUE', 162.00, NOW() - INTERVAL '296 minute', 1, NULL),
     ('DEPOSITO', 179.00, NOW() - INTERVAL '297 minute', NULL, 2),
-    ('SAQUE', -196.00, NOW() - INTERVAL '298 minute', 4, NULL),
-    ('SAQUE', -230.00, NOW() - INTERVAL '300 minute', 7, NULL);
+    ('SAQUE', 196.00, NOW() - INTERVAL '298 minute', 4, NULL),
+    ('SAQUE', 230.00, NOW() - INTERVAL '300 minute', 7, NULL);
 
 -- ------------------------------------------------------------
 -- Verificações
@@ -405,10 +410,10 @@ VALUES
 SELECT COUNT(*) FROM customer;
 SELECT COUNT(*) FROM account;
 SELECT type, COUNT(*) FROM account GROUP BY type ORDER BY type;
-SELECT COUNT(*) FROM transaction;
-SELECT type, COUNT(*) FROM transaction GROUP BY type ORDER BY type;
+SELECT COUNT(*) FROM bank_transaction;
+SELECT type, COUNT(*) FROM bank_transaction GROUP BY type ORDER BY type;
 
 -- ------------------------------------------------------------
 -- Consulta saldo das contas
 -- ------------------------------------------------------------
-SELECT * FROM view_balance;
+SELECT * FROM view_saldo;

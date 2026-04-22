@@ -6,6 +6,8 @@ import br.com.ada.quarkus.model.Transaction;
 import br.com.ada.quarkus.resource.PageResponse;
 import br.com.ada.quarkus.service.AccountService;
 import br.com.ada.quarkus.service.CurrentUserService;
+import br.com.ada.quarkus.service.CustomerService;
+import br.com.ada.quarkus.service.TransactionService;
 import jakarta.annotation.security.PermitAll;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
@@ -16,9 +18,11 @@ import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
+import br.com.ada.quarkus.util.OutputMaskFormatter;
 
 import java.math.BigDecimal;
 import java.net.URI;
+import br.com.ada.quarkus.resource.transaction.TransactionResponse;
 
 /**
  * Recurso responsável pelos endpoints de contas bancárias.
@@ -39,6 +43,12 @@ public class AccountResource {
 
     @Inject
     CurrentUserService currentUserService;
+
+    @Inject
+    CustomerService customerService;
+
+    @Inject
+    TransactionService transactionService;
 
     /**
      * Cria uma nova conta bancária para um cliente.
@@ -79,10 +89,45 @@ public class AccountResource {
     @GET
     @Path("/{id}")
     @RolesAllowed({"GERENTE", "CLIENTE"})
-    public AccountResponse findById(@PathParam("id") Long id) {
+    public AccountDetailsResponse findById(@PathParam("id") Long id) {
+        //busca conta
         Account account = accountService.findById(id);
+        // valida proprietário da conta
         validateAccountOwnership(account);
-        return toResponse(account);
+        // busca titular
+        var customer = customerService.findById(account.getCustomerId());
+        // monta titular
+        CustomerSummaryResponse holder =
+                new CustomerSummaryResponse(
+                        customer.getId(),
+                        customer.getName(),
+                        customer.getEmail()
+                );
+        // busca transaçoes do dia
+        var todayTransactions =
+                transactionService
+                        .listTodayByAccountId(id, 0, 10)
+                        .content()
+                        .stream()
+                        .map(this::toDetailedTransactionResponse)
+                        .toList();
+        // monta links
+        AccountLinksResponse links =
+                new AccountLinksResponse(
+                        "/transacoes?contaId=" + id
+                );
+        //   retorna resposta completa
+        return new AccountDetailsResponse(
+                account.getId(),
+                OutputMaskFormatter.formatAccountNumber(
+                        account.getAccountNumber()
+                ),
+                account.getType(),
+                account.getBalance(),
+                holder,
+                todayTransactions,
+                links
+        );
     }
 
     /**
@@ -90,7 +135,7 @@ public class AccountResource {
      *
      * <p>Endpoint público. Contas do tipo ELETRONICA não permitem depósitos.</p>
      *
-     * @param id identificador da conta receptora.
+     * @param id      identificador da conta receptora.
      * @param request dados do depósito.
      * @return dados da transação realizada.
      */
@@ -102,7 +147,7 @@ public class AccountResource {
             @PathParam("id") Long id,
             @Valid DepositRequest request) {
         Transaction transaction = accountService.deposit(id, request.amount());
-        return toTransactionResponse(transaction);
+        return toDetailedTransactionResponse(transaction);
     }
 
     /**
@@ -111,7 +156,7 @@ public class AccountResource {
      * <p>Apenas o proprietário ou um gerente podem sacar. Contas do tipo
      * ELETRONICA não permitem saques. Valida saldo suficiente.</p>
      *
-     * @param id identificador da conta de origem.
+     * @param id      identificador da conta de origem.
      * @param request dados do saque.
      * @return dados da transação realizada.
      */
@@ -126,7 +171,7 @@ public class AccountResource {
         validateAccountOwnership(account);
 
         Transaction transaction = accountService.withdraw(id, request.amount());
-        return toTransactionResponse(transaction);
+        return toDetailedTransactionResponse(transaction);
     }
 
     /**
@@ -135,7 +180,7 @@ public class AccountResource {
      * <p>Apenas o proprietário da conta de origem ou um gerente podem transferir.
      * Valida saldo suficiente e que as contas são diferentes.</p>
      *
-     * @param id identificador da conta de origem.
+     * @param id      identificador da conta de origem.
      * @param request dados da transferência.
      * @return dados da transação realizada.
      */
@@ -154,7 +199,7 @@ public class AccountResource {
                 request.destinationAccountId(),
                 request.amount()
         );
-        return toTransactionResponse(transaction);
+        return toDetailedTransactionResponse(transaction);
     }
 
     /**
@@ -189,12 +234,7 @@ public class AccountResource {
      * @return resposta com dados públicos da conta.
      */
     private AccountResponse toResponse(Account account) {
-        return new AccountResponse(
-                account.getId(),
-                account.getAccountNumber(),
-                account.getType(),
-                account.getBalance()
-        );
+        return AccountResponse.fromEntity(account);
     }
 
     /**
@@ -216,19 +256,29 @@ public class AccountResource {
      * @param transaction entidade de transação.
      * @return resposta com dados da transação.
      */
-    private TransactionResponse toTransactionResponse(Transaction transaction) {
-        Account account = accountService.findById(
-                transaction.getSourceAccountId() != null
-                        ? transaction.getSourceAccountId()
-                        : transaction.getDestinationAccountId()
-        );
+    private TransactionResponse toDetailedTransactionResponse(Transaction transaction) {
+        AccountResponse sourceAccount = null;
+        AccountResponse destinationAccount = null;
+
+        if (transaction.getSourceAccountId() != null) {
+            sourceAccount = AccountResponse.fromEntity(
+                    accountService.findById(transaction.getSourceAccountId())
+            );
+        }
+
+        if (transaction.getDestinationAccountId() != null) {
+            destinationAccount = AccountResponse.fromEntity(
+                    accountService.findById(transaction.getDestinationAccountId())
+            );
+        }
 
         return new TransactionResponse(
                 transaction.getId(),
                 transaction.getType(),
                 transaction.getAmount(),
-                account.getBalance(),
-                transaction.getDateTime()
+                transaction.getDateTime(),
+                sourceAccount,
+                destinationAccount
         );
     }
 }

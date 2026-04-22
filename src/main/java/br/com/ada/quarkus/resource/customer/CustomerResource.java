@@ -49,7 +49,7 @@ public class CustomerResource {
      * @return página de clientes com dados públicos.
      */
     @GET
-    @PermitAll
+    @RolesAllowed("GERENTE")
     public PageResponse<CustomerResponse> list(
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("10") int size) {
@@ -70,8 +70,11 @@ public class CustomerResource {
      */
     @GET
     @Path("/{id}")
-    @PermitAll
+    @RolesAllowed({"GERENTE","CLIENTE"})
     public CustomerResponse findById(@PathParam("id") Long id) {
+
+        validateOwnershipOrManager(id);
+
         return toResponse(customerService.findById(id));
     }
 
