@@ -8,8 +8,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 /**
- * Componente responsável por converter entidades Transaction
- * em TransactionResponse.
+ * Componente responsável por converter entidades {@link Transaction}
+ * em {@link TransactionResponse}.
  *
  * <p>Centraliza a lógica de montagem da resposta detalhada de transações,
  * evitando duplicação entre resources.</p>
@@ -24,12 +24,19 @@ public class TransactionResponseMapper {
     AccountService accountService;
 
     /**
-     * Converte uma entidade Transaction em TransactionResponse.
+     * Converte uma entidade {@link Transaction} em {@link TransactionResponse}.
+     *
+     * <p>Quando a transação possui conta de origem ou destino, os dados públicos
+     * dessas contas são buscados e incluídos na resposta.</p>
      *
      * @param transaction entidade de transação.
-     * @return resposta detalhada da transação.
+     * @return resposta detalhada da transação, ou {@code null} quando a transação for nula.
      */
     public TransactionResponse toResponse(Transaction transaction) {
+        if (transaction == null) {
+            return null;
+        }
+
         AccountResponse sourceAccount = null;
         AccountResponse destinationAccount = null;
 
@@ -56,10 +63,10 @@ public class TransactionResponseMapper {
     }
 
     /**
-     * Converte a entidade Account em AccountResponse simplificado.
+     * Converte a entidade {@link Account} em {@link AccountResponse}.
      *
      * @param account entidade de conta.
-     * @return resposta com dados da conta.
+     * @return resposta com dados públicos da conta.
      */
     private AccountResponse toAccountResponse(Account account) {
         return new AccountResponse(

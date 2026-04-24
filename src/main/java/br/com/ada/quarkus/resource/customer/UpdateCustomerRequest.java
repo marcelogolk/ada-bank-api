@@ -7,12 +7,12 @@ import jakarta.validation.constraints.Size;
 /**
  * Representa os dados permitidos para atualização de um cliente.
  *
- * <p>O CPF não faz parte deste request, pois não pode ser alterado
- * após o cadastro.</p>
+ * <p>O CPF não pode ser alterado após o cadastro e, por isso,
+ * não faz parte deste request.</p>
  *
  * @param name novo nome do cliente.
  * @param email novo email do cliente.
- * @param password nova senha do cliente.
+ * @param password nova senha do cliente em texto puro.
  */
 public record UpdateCustomerRequest(
 

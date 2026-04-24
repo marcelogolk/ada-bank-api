@@ -4,45 +4,46 @@ import com.fasterxml.jackson.annotation.JsonValue;
 
 /**
  * Define os tipos de conta disponíveis no sistema bancário.
- * <p>
- * Este enum é utilizado para garantir a integridade dos dados e
- * padronizar as regras de negócio associadas a cada modalidade de conta.
- * </p>
+ *
+ * <p>Este enum padroniza os tipos aceitos pela aplicação e ajuda a manter
+ * a integridade das regras de negócio associadas a cada modalidade de conta.</p>
  *
  * @author Marcelo
+ * @version 1.0
  */
 public enum AccountType {
 
     /**
-     * Conta Corrente: Modalidade padrão para movimentações diárias,
-     * saques e pagamentos.
+     * Conta Corrente: modalidade padrão para movimentações diárias.
      */
     CORRENTE("CORRENTE"),
 
     /**
-     * Conta Poupança: Modalidade focada em reserva financeira e rendimentos.
+     * Conta Poupança: modalidade voltada para reserva financeira.
      */
     POUPANCA("POUPANCA"),
 
     /**
-     * Conta Eletrônica: Modalidade exclusiva para transações digitais
-     * e pagamentos online.
+     * Conta Eletrônica: modalidade exclusiva para operações digitais,
+     * conforme regras específicas do projeto.
      */
     ELETRONICA("ELETRONICA");
 
     private final String value;
 
     /**
-     * Construtor do enum para associar o valor textual do tipo de conta.
+     * Associa o valor textual usado na serialização JSON.
      *
-     * @param value O valor do tipo de conta utilizado na serialização JSON.
+     * @param value valor textual do tipo de conta.
      */
     AccountType(String value) {
         this.value = value;
     }
 
     /**
-     * @return O valor em português para ser usado no JSON.
+     * Retorna o valor textual utilizado na serialização JSON.
+     *
+     * @return valor textual do tipo de conta.
      */
     @JsonValue
     public String getValue() {
@@ -50,16 +51,15 @@ public enum AccountType {
     }
 
     /**
-     * Retorna uma descrição amigável do tipo de conta em português.
-     * Útil para exibir em relatórios ou interfaces de usuário.
+     * Retorna uma descrição amigável do tipo de conta.
      *
-     * @return A descrição formatada do tipo de conta.
+     * @return descrição formatada do tipo de conta.
      */
     public String getDescription() {
         return switch (this) {
             case CORRENTE -> "Conta Corrente";
             case POUPANCA -> "Conta Poupança";
-            case ELETRONICA -> "Conta Eletronica";
+            case ELETRONICA -> "Conta Eletrônica";
         };
     }
 }

@@ -15,7 +15,7 @@ import jakarta.ws.rs.core.MediaType;
  * Recurso responsável pelos endpoints de transações.
  *
  * <p>Recebe as requisições HTTP relacionadas à consulta de transações
- * com autenticação e autorização.</p>
+ * com autenticação, autorização e paginação.</p>
  *
  * @author Marcelo
  * @version 2.0
@@ -24,6 +24,8 @@ import jakarta.ws.rs.core.MediaType;
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
 public class TransactionResource {
+
+    private static final int MAX_PAGE_SIZE = 100;
 
     @Inject
     TransactionService transactionService;
@@ -40,7 +42,8 @@ public class TransactionResource {
     /**
      * Busca uma transação pelo identificador.
      *
-     * <p>Apenas o proprietário da conta ou um gerente podem visualizar a transação.</p>
+     * <p>Gerentes podem visualizar qualquer transação.
+     * Clientes só podem visualizar transações vinculadas às suas próprias contas.</p>
      *
      * @param id identificador da transação.
      * @return dados completos da transação.
@@ -57,11 +60,12 @@ public class TransactionResource {
     /**
      * Lista todas as transações de uma conta com paginação.
      *
-     * <p>Apenas o proprietário da conta ou um gerente podem visualizar o histórico.</p>
+     * <p>Gerentes podem visualizar o histórico de qualquer conta.
+     * Clientes só podem visualizar o histórico das próprias contas.</p>
      *
      * @param accountId identificador da conta.
-     * @param page número da página (0-indexed). Padrão: 0
-     * @param size quantidade de transações por página. Padrão: 10
+     * @param page número da página (0-indexed). Padrão: 0.
+     * @param size quantidade de transações por página. Padrão: 10.
      * @return página de transações da conta.
      */
     @GET
@@ -71,6 +75,7 @@ public class TransactionResource {
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("10") int size) {
 
+        validateListParameters(accountId, page, size);
         validateAccountAccess(accountId);
 
         return PageResponse.from(
@@ -82,11 +87,12 @@ public class TransactionResource {
     /**
      * Lista as transações do dia atual de uma conta com paginação.
      *
-     * <p>Apenas o proprietário da conta ou um gerente podem visualizar.</p>
+     * <p>Gerentes podem visualizar as transações do dia de qualquer conta.
+     * Clientes só podem visualizar as transações do dia das próprias contas.</p>
      *
      * @param accountId identificador da conta.
-     * @param page número da página (0-indexed). Padrão: 0
-     * @param size quantidade de transações por página. Padrão: 10
+     * @param page número da página (0-indexed). Padrão: 0.
+     * @param size quantidade de transações por página. Padrão: 10.
      * @return página de transações do dia atual.
      */
     @GET
@@ -97,6 +103,7 @@ public class TransactionResource {
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("10") int size) {
 
+        validateListParameters(accountId, page, size);
         validateAccountAccess(accountId);
 
         return PageResponse.from(
@@ -106,10 +113,33 @@ public class TransactionResource {
     }
 
     /**
+     * Valida os parâmetros de listagem paginada.
+     *
+     * @param accountId identificador da conta.
+     * @param page número da página.
+     * @param size tamanho da página.
+     * @throws BadRequestException quando algum parâmetro é inválido.
+     */
+    private void validateListParameters(Long accountId, int page, int size) {
+        if (accountId == null) {
+            throw new BadRequestException("O parâmetro accountId é obrigatório");
+        }
+
+        if (page < 0) {
+            throw new BadRequestException("O parâmetro page deve ser maior ou igual a zero");
+        }
+
+        if (size <= 0 || size > MAX_PAGE_SIZE) {
+            throw new BadRequestException("O parâmetro size deve estar entre 1 e " + MAX_PAGE_SIZE);
+        }
+    }
+
+    /**
      * Valida se o usuário logado tem acesso à transação.
      *
      * <p>Gerentes podem acessar qualquer transação.
-     * Clientes só podem acessar transações de suas próprias contas.</p>
+     * Clientes só podem acessar transações vinculadas às suas próprias contas,
+     * seja como origem ou destino.</p>
      *
      * @param transaction transação a validar.
      * @throws ForbiddenException quando o usuário não tem permissão.

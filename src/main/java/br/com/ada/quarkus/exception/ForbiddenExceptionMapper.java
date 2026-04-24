@@ -7,6 +7,12 @@ import jakarta.ws.rs.core.UriInfo;
 import jakarta.ws.rs.ext.ExceptionMapper;
 import jakarta.ws.rs.ext.Provider;
 
+/**
+ * Mapper responsável por tratar exceções de acesso negado.
+ *
+ * <p>Retorna status HTTP 403 quando o usuário não possui permissão
+ * para acessar determinado recurso.</p>
+ */
 @Provider
 public class ForbiddenExceptionMapper
         implements ExceptionMapper<ForbiddenException> {
@@ -16,10 +22,9 @@ public class ForbiddenExceptionMapper
 
     @Override
     public Response toResponse(ForbiddenException exception) {
-
         ErrorResponse error = new ErrorResponse(
                 Response.Status.FORBIDDEN.getStatusCode(),
-                "Forbidden",
+                Response.Status.FORBIDDEN.getReasonPhrase(),
                 exception.getMessage(),
                 uriInfo.getPath()
         );

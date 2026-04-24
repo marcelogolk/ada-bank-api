@@ -2,7 +2,6 @@ package br.com.ada.quarkus.model;
 
 import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import org.hibernate.annotations.Formula;
@@ -12,11 +11,12 @@ import java.util.Objects;
 
 /**
  * Representa uma conta bancária dentro do sistema da ADA.
- * <p>
- * Esta classe vincula um número de conta e um tipo específico a um cliente,
- * garantindo que as regras de integridade para identificação bancária sejam respeitadas.
- * O saldo é calculado dinamicamente a partir das transações registradas.
- * </p>
+ *
+ * <p>Esta classe vincula um número de conta e um tipo específico a um cliente,
+ * garantindo a integridade da identificação bancária.</p>
+ *
+ * <p>O número da conta é gerado automaticamente pelo sistema durante a criação
+ * da conta. O saldo é calculado dinamicamente a partir das transações registradas.</p>
  *
  * @author Marcelo
  * @version 1.0
@@ -27,28 +27,35 @@ public class Account extends PanacheEntityBase {
 
     /**
      * Identificador único da conta no sistema.
-     * Gerado automaticamente pelo banco (auto-increment).
+     * Gerado automaticamente por sequence do PostgreSQL.
      */
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @SequenceGenerator(
+            name = "account_seq",
+            sequenceName = "account_id_seq",
+            allocationSize = 1
+    )
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "account_seq")
     private Long id;
 
     /**
      * Número identificador da conta com dígito verificador.
-     * Formato: 9 dígitos base + 1 dígito verificador (total 10 dígitos).
-     * Exemplo: "0000000018" (base "000000001" + dígito "8")
-     * Campo obrigatório, único e mapeado para a coluna "account_number" do banco.
+     *
+     * <p>Formato: 9 dígitos base + 1 dígito verificador, totalizando 10 dígitos.
+     * Exemplo: "0000000018".</p>
+     *
+     * <p>Este valor é gerado pelo sistema e armazenado sem máscara visual.</p>
      */
-    @NotBlank(message = "O número da conta é obrigatório")
-    @Pattern(regexp = "\\d{10}", message = "O número da conta deve conter exatamente 10 dígitos (9 base + 1 verificador)")
+    @Pattern(
+            regexp = "\\d{10}",
+            message = "O número da conta deve conter exatamente 10 dígitos (9 base + 1 verificador)"
+    )
     @Column(name = "account_number", nullable = false, unique = true, length = 10)
     private String accountNumber;
 
-
     /**
      * Tipo da conta bancária.
-     * Define se a conta é CORRENTE, POUPANCA ou ELETRONICA através do Enum {@link AccountType}.
-     * Campo obrigatório e mapeado para a coluna "type" do banco.
+     * Define se a conta é CORRENTE, POUPANCA ou ELETRONICA.
      */
     @NotNull(message = "O tipo da conta é obrigatório")
     @Enumerated(EnumType.STRING)
@@ -56,9 +63,8 @@ public class Account extends PanacheEntityBase {
     private AccountType type;
 
     /**
-     * Identificador do cliente (Customer) proprietário desta conta.
+     * Identificador do cliente proprietário da conta.
      * Representa a chave estrangeira para a entidade Customer.
-     * Campo obrigatório e mapeado para a coluna "customer_id" do banco.
      */
     @NotNull(message = "O cliente da conta é obrigatório")
     @Column(name = "customer_id", nullable = false)
@@ -67,14 +73,8 @@ public class Account extends PanacheEntityBase {
     /**
      * Saldo calculado dinamicamente a partir das transações.
      *
-     * Este campo é calculado em tempo real através de uma fórmula SQL que:
-     * - Soma todos os depósitos para esta conta
-     * - Subtrai todos os saques desta conta
-     * - Soma as transferências recebidas
-     * - Subtrai as transferências enviadas
-     *
-     * O saldo NÃO é persistido no banco de dados, apenas calculado quando consultado.
-     * Isso garante que o saldo sempre reflita o estado real das transações.
+     * <p>Este campo não é persistido diretamente. O valor é calculado pelo banco
+     * considerando depósitos, saques e transferências relacionados à conta.</p>
      */
     @Formula("(SELECT COALESCE(SUM(" +
             "CASE " +
@@ -87,20 +87,18 @@ public class Account extends PanacheEntityBase {
     private BigDecimal balance;
 
     /**
-     * Construtor padrão (sem argumentos).
-     * Essencial para o funcionamento de frameworks de persistência e serialização.
+     * Construtor padrão necessário para JPA/Hibernate.
      */
     public Account() {
     }
 
     /**
      * Construtor para inicialização dos campos principais da conta.
-     * O saldo é calculado automaticamente pela fórmula.
      *
-     * @param id            O identificador único da conta.
-     * @param accountNumber O número da conta bancária.
-     * @param type          O tipo da conta (Enum AccountType).
-     * @param customerId    O identificador do cliente dono da conta.
+     * @param id identificador único da conta.
+     * @param accountNumber número da conta bancária.
+     * @param type tipo da conta.
+     * @param customerId identificador do cliente dono da conta.
      */
     public Account(Long id, String accountNumber, AccountType type, Long customerId) {
         this.id = id;
@@ -109,44 +107,34 @@ public class Account extends PanacheEntityBase {
         this.customerId = customerId;
     }
 
-    // ========== Getters e Setters ==========
-
-    /** @return O identificador único da conta. */
     public Long getId() {
         return id;
     }
 
-    /** @param id O novo identificador da conta. */
     public void setId(Long id) {
         this.id = id;
     }
 
-    /** @return O número da conta bancária. */
     public String getAccountNumber() {
         return accountNumber;
     }
 
-    /** @param accountNumber O novo número da conta. */
     public void setAccountNumber(String accountNumber) {
         this.accountNumber = accountNumber;
     }
 
-    /** @return O tipo da conta (Enum). */
     public AccountType getType() {
         return type;
     }
 
-    /** @param type O novo tipo da conta. */
     public void setType(AccountType type) {
         this.type = type;
     }
 
-    /** @return O identificador do cliente da conta. */
     public Long getCustomerId() {
         return customerId;
     }
 
-    /** @param customerId O novo identificador do cliente da conta. */
     public void setCustomerId(Long customerId) {
         this.customerId = customerId;
     }
@@ -154,31 +142,28 @@ public class Account extends PanacheEntityBase {
     /**
      * Retorna o saldo calculado dinamicamente.
      *
-     * Este valor é somente leitura (read-only) pois é calculado pela @Formula.
-     * Não é possível atualizar manualmente o saldo; ele é sempre derivado
-     * das transações registradas.
-     *
-     * @return O saldo atual da conta.
+     * @return saldo atual da conta.
      */
     public BigDecimal getBalance() {
         return balance;
     }
 
     /**
-     *  Calcula o dígito verificador do número da conta.
-     *  Fórmula: 9 - (soma dos dígitos % 10)
+     * Calcula o dígito verificador com base no número atualmente definido em {@code accountNumber}.
      *
-     *  @return O dígito verificador calculado.
+     * <p>Fórmula: 9 - (soma dos dígitos % 10).</p>
+     *
+     * @return dígito verificador calculado.
      */
     public int calculateCheckDigit() {
-        int soma = 0;
-        for (char c : accountNumber.toCharArray()) {
-            soma += c - '0';
-        }
-        return 9 - (soma % 10);
-    }
+        int sum = 0;
 
-    // ========== Métodos Object ==========
+        for (char c : accountNumber.toCharArray()) {
+            sum += c - '0';
+        }
+
+        return 9 - (sum % 10);
+    }
 
     @Override
     public String toString() {
@@ -195,6 +180,7 @@ public class Account extends PanacheEntityBase {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
+
         Account account = (Account) o;
         return Objects.equals(id, account.id) &&
                 Objects.equals(accountNumber, account.accountNumber);

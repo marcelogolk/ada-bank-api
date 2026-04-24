@@ -4,46 +4,45 @@ import com.fasterxml.jackson.annotation.JsonValue;
 
 /**
  * Define os tipos de transações financeiras suportadas pelo sistema.
- * <p>
- * Este enum é utilizado para garantir a integridade dos dados e
- * padronizar as regras de negócio associadas a cada tipo de operação.
- * </p>
+ *
+ * <p>Este enum padroniza as operações aceitas pela aplicação e ajuda
+ * a preservar a integridade das regras de negócio.</p>
  *
  * @author Marcelo
+ * @version 1.0
  */
 public enum TransactionType {
 
     /**
-     * Representa a entrada de fundos em uma conta.
-     * Utilizado para depósitos de clientes ou transferências recebidas.
+     * Representa entrada direta de fundos em uma conta.
      */
     DEPOSITO("DEPOSITO"),
 
     /**
-     * Representa a retirada de fundos de uma conta.
-     * Utilizado para saques em caixa ou transferências enviadas.
+     * Representa retirada direta de fundos de uma conta.
      */
     SAQUE("SAQUE"),
 
     /**
-     * Representa a movimentação de fundos entre duas contas distintas.
-     * Pode ser entre contas do mesmo cliente ou de clientes diferentes.
+     * Representa movimentação de fundos entre duas contas distintas.
      */
     TRANSFERENCIA("TRANSFERENCIA");
 
     private final String value;
 
     /**
-     * Construtor do enum para associar o valor textual do tipo de transação.
+     * Associa o valor textual usado na serialização JSON.
      *
-     * @param value O valor do tipo de transação utilizado na serialização JSON.
+     * @param value valor textual do tipo de transação.
      */
     TransactionType(String value) {
         this.value = value;
     }
 
     /**
-     * @return O valor em português para ser usado no JSON.
+     * Retorna o valor textual utilizado na serialização JSON.
+     *
+     * @return valor textual do tipo de transação.
      */
     @JsonValue
     public String getValue() {
@@ -51,10 +50,9 @@ public enum TransactionType {
     }
 
     /**
-     * Retorna uma descrição amigável do tipo de transação em português.
-     * Útil para exibir em relatórios ou interfaces de usuário.
+     * Retorna uma descrição amigável do tipo de transação.
      *
-     * @return A descrição formatada do tipo de transação.
+     * @return descrição formatada do tipo de transação.
      */
     public String getDescription() {
         return switch (this) {

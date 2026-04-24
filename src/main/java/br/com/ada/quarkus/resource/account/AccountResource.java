@@ -26,8 +26,15 @@ import java.net.URI;
 /**
  * Recurso responsável pelos endpoints de contas bancárias.
  *
- * <p>Recebe as requisições HTTP relacionadas ao gerenciamento de contas,
- * operações de depósito, saque e transferência com autenticação e autorização.</p>
+ * <p>Gerencia operações relacionadas a contas, incluindo:
+ * criação, consulta, depósito, saque e transferência.</p>
+ *
+ * <p>Aplica regras de segurança baseadas em papéis:
+ * <ul>
+ *     <li>GERENTE: acesso completo</li>
+ *     <li>CLIENTE: acesso restrito às próprias contas</li>
+ * </ul>
+ * </p>
  *
  * @author Marcelo
  * @version 2.0
@@ -53,22 +60,24 @@ public class AccountResource {
     TransactionResponseMapper transactionResponseMapper;
 
     /**
-     * Cria uma nova conta bancária para um cliente.
+     * Cria uma nova conta bancária.
      *
-     * <p>Apenas gerentes podem criar contas. O número da conta é gerado
-     * automaticamente com dígito verificador.</p>
+     * <p>Apenas usuários com papel GERENTE podem criar contas.</p>
+     *
+     * <p>O número da conta é gerado automaticamente pelo sistema,
+     * incluindo o dígito verificador.</p>
      *
      * @param request dados da conta a ser criada.
      * @param uriInfo informações da URI da requisição.
-     * @return resposta HTTP 201 com a conta criada.
+     * @return resposta HTTP 201 contendo a conta criada.
      */
     @POST
     @Transactional
     @RolesAllowed("GERENTE")
-
     public Response create(
             @Valid CreateAccountRequest request,
             @Context UriInfo uriInfo) {
+
         Account account = accountService.create(toAccount(request));
         AccountResponse response = toResponse(account);
 
@@ -84,15 +93,23 @@ public class AccountResource {
     /**
      * Busca uma conta pelo identificador.
      *
-     * <p>Apenas o proprietário ou um gerente podem visualizar a conta.</p>
+     * <p>Retorna dados completos da conta, incluindo:
+     * saldo, titular e transações recentes.</p>
+     *
+     * <p>Apenas o proprietário da conta ou um gerente podem acessar.</p>
      *
      * @param id identificador da conta.
-     * @return dados da conta com saldo e transações do dia.
+     * @return dados detalhados da conta.
      */
     @GET
     @Path("/{id}")
     @RolesAllowed({"GERENTE", "CLIENTE"})
     public AccountDetailsResponse findById(@PathParam("id") Long id) {
+
+        if (id == null) {
+            throw new BadRequestException("O ID da conta é obrigatório");
+        }
+
         Account account = accountService.findById(id);
         validateAccountOwnership(account);
 
@@ -120,9 +137,7 @@ public class AccountResource {
 
         return new AccountDetailsResponse(
                 account.getId(),
-                OutputMaskFormatter.formatAccountNumber(
-                        account.getAccountNumber()
-                ),
+                OutputMaskFormatter.formatAccountNumber(account.getAccountNumber()),
                 account.getType(),
                 account.getBalance(),
                 holder,
@@ -134,12 +149,11 @@ public class AccountResource {
     /**
      * Realiza um depósito em uma conta.
      *
-     * <p>Endpoint público, conforme regra de negócio.</p>
+     * <p>Endpoint público (não requer autenticação).</p>
      *
-     * <p>A validação da existência da conta, do valor informado
-     * e das restrições de tipo de conta é realizada na camada de serviço.</p>
+     * <p>A validação da conta e do valor é feita na camada de serviço.</p>
      *
-     * @param id identificador da conta receptora.
+     * @param id identificador da conta.
      * @param request dados do depósito.
      * @return dados da transação realizada.
      */
@@ -150,6 +164,7 @@ public class AccountResource {
     public TransactionResponse deposit(
             @PathParam("id") Long id,
             @Valid DepositRequest request) {
+
         Transaction transaction = accountService.deposit(id, request.amount());
         return transactionResponseMapper.toResponse(transaction);
     }
@@ -157,10 +172,16 @@ public class AccountResource {
     /**
      * Realiza um saque em uma conta.
      *
-     * <p>Apenas o proprietário ou um gerente podem sacar. Contas do tipo
-     * ELETRONICA não permitem saques. Valida saldo suficiente.</p>
+     * <p>Somente o proprietário da conta ou um gerente podem realizar saques.</p>
      *
-     * @param id identificador da conta de origem.
+     * <p>Regras de negócio:
+     * <ul>
+     *     <li>Conta ELETRONICA não permite saque</li>
+     *     <li>Deve haver saldo suficiente</li>
+     * </ul>
+     * </p>
+     *
+     * @param id identificador da conta.
      * @param request dados do saque.
      * @return dados da transação realizada.
      */
@@ -171,6 +192,7 @@ public class AccountResource {
     public TransactionResponse withdraw(
             @PathParam("id") Long id,
             @Valid WithdrawRequest request) {
+
         Account account = accountService.findById(id);
         validateAccountOwnership(account);
 
@@ -179,10 +201,16 @@ public class AccountResource {
     }
 
     /**
-     * Realiza uma transferência entre duas contas.
+     * Realiza uma transferência entre contas.
      *
-     * <p>Apenas o proprietário da conta de origem ou um gerente podem transferir.
-     * Valida saldo suficiente e que as contas são diferentes.</p>
+     * <p>Somente o proprietário da conta de origem ou um gerente podem transferir.</p>
+     *
+     * <p>Regras de negócio:
+     * <ul>
+     *     <li>Saldo suficiente</li>
+     *     <li>Contas não podem ser iguais</li>
+     * </ul>
+     * </p>
      *
      * @param id identificador da conta de origem.
      * @param request dados da transferência.
@@ -195,6 +223,7 @@ public class AccountResource {
     public TransactionResponse transfer(
             @PathParam("id") Long id,
             @Valid TransferRequest request) {
+
         Account sourceAccount = accountService.findById(id);
         validateAccountOwnership(sourceAccount);
 
@@ -203,17 +232,17 @@ public class AccountResource {
                 request.destinationAccountId(),
                 request.amount()
         );
+
         return transactionResponseMapper.toResponse(transaction);
     }
 
     /**
-     * Valida se o usuário logado é o proprietário da conta ou é gerente.
+     * Valida se o usuário logado pode acessar a conta.
      *
-     * <p>Gerentes podem acessar qualquer conta.
+     * <p>Gerentes têm acesso total.
      * Clientes só podem acessar suas próprias contas.</p>
      *
-     * @param account conta a validar.
-     * @throws ForbiddenException quando o usuário não tem permissão.
+     * @param account conta a ser validada.
      */
     private void validateAccountOwnership(Account account) {
         LoggedUser currentUser = currentUserService.getLoggedUser();
@@ -230,17 +259,17 @@ public class AccountResource {
     }
 
     /**
-     * Converte a entidade Account em AccountResponse.
+     * Converte entidade Account para AccountResponse.
      *
      * @param account entidade de conta.
-     * @return resposta com dados públicos da conta.
+     * @return DTO de resposta.
      */
     private AccountResponse toResponse(Account account) {
         return AccountResponse.fromEntity(account);
     }
 
     /**
-     * Converte o request de criação em entidade Account.
+     * Converte CreateAccountRequest para entidade Account.
      *
      * @param request dados recebidos na criação.
      * @return entidade Account.

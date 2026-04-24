@@ -7,8 +7,13 @@ import jakarta.ws.rs.ext.Provider;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.UriInfo;
 
+/**
+ * Mapper responsável por tratar exceções do tipo {@link BadRequestException}.
+ *
+ * <p>Retorna uma resposta padronizada com status HTTP 400 e detalhes do erro.</p>
+ */
 @Provider
-public class BadRequestExceptionMapper
+public class BadRequestExceptionMapper<ErrorResponse>
         implements ExceptionMapper<BadRequestException> {
 
     @Context
@@ -19,7 +24,7 @@ public class BadRequestExceptionMapper
 
         ErrorResponse error = new ErrorResponse(
                 Response.Status.BAD_REQUEST.getStatusCode(),
-                "Bad Request",
+                Response.Status.BAD_REQUEST.getReasonPhrase(),
                 exception.getMessage(),
                 uriInfo.getPath()
         );

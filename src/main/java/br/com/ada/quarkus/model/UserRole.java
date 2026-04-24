@@ -4,15 +4,12 @@ import com.fasterxml.jackson.annotation.JsonValue;
 
 /**
  * Define os papéis/permissões disponíveis no sistema bancário.
- * <p>
- * Este enum é utilizado para controlar o acesso e as operações permitidas
- * para cada tipo de usuário no sistema. Garante a integridade das regras
- * de autorização através de uma enumeração de valores válidos.
- * </p>
- * <p>
- * Os papéis são armazenados como String no banco de dados para facilitar
- * a serialização em JWT Tokens e respostas JSON.
- * </p>
+ *
+ * <p>Este enum é utilizado para controlar autorização e diferenciar
+ * permissões administrativas de permissões de cliente.</p>
+ *
+ * <p>As constantes do enum usam nomes em inglês no código, enquanto os valores
+ * serializados e persistidos seguem os papéis usados pela API: GERENTE e CLIENTE.</p>
  *
  * @author Marcelo
  * @version 1.0
@@ -21,44 +18,35 @@ public enum UserRole {
 
     /**
      * Papel de gerente do banco.
-     * Gerentes possuem acesso administrativo total ao sistema e podem:
-     * - Acessar qualquer conta bancária
-     * - Visualizar todas as transações
-     * - Gerenciar clientes e contas
+     *
+     * <p>Gerentes possuem acesso administrativo e podem gerenciar clientes,
+     * contas e visualizar transações de qualquer conta.</p>
      */
     MANAGER("GERENTE"),
 
     /**
      * Papel de cliente do banco.
-     * Clientes possuem acesso restrito apenas à sua própria conta e podem:
-     * - Acessar apenas sua própria conta bancária
-     * - Visualizar apenas suas próprias transações
-     * - Realizar operações limitadas à sua conta
+     *
+     * <p>Clientes possuem acesso restrito aos próprios dados, contas
+     * e transações.</p>
      */
     CUSTOMER("CLIENTE");
 
-    /**
-     * Valor em texto do papel para serialização em JSON e armazenamento no banco.
-     */
     private final String value;
 
     /**
-     * Construtor do enum para associar o valor textual do papel.
+     * Associa o valor textual usado no banco, no JWT e na serialização JSON.
      *
-     * @param value O valor do papel utilizado na serialização JSON e banco de dados.
+     * @param value valor textual do papel.
      */
     UserRole(String value) {
         this.value = value;
     }
 
     /**
-     * Retorna o valor em texto do papel para serialização JSON.
-     * <p>
-     * Esta anotação garante que ao serializar um objeto contendo este enum,
-     * o valor retornado será a String associada, não o nome da constante.
-     * </p>
+     * Retorna o valor textual do papel.
      *
-     * @return O valor em texto do papel (ex: "GERENTE" ou "CLIENTE").
+     * @return valor textual do papel, como "GERENTE" ou "CLIENTE".
      */
     @JsonValue
     public String getValue() {
@@ -66,13 +54,9 @@ public enum UserRole {
     }
 
     /**
-     * Retorna uma descrição amigável do papel em português.
-     * <p>
-     * Útil para exibir em relatórios, interfaces de usuário ou logs
-     * de forma mais legível para usuários finais.
-     * </p>
+     * Retorna uma descrição amigável do papel.
      *
-     * @return A descrição formatada do papel.
+     * @return descrição formatada do papel.
      */
     public String getDescription() {
         return switch (this) {

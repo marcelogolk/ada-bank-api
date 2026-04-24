@@ -21,8 +21,19 @@ import java.net.URI;
 /**
  * Recurso responsável pelos endpoints de clientes.
  *
- * <p>Recebe as requisições HTTP relacionadas ao cadastro,
- * consulta e atualização de clientes com autenticação e paginação.</p>
+ * <p>Permite operações de:
+ * <ul>
+ *     <li>Cadastro de clientes (signup)</li>
+ *     <li>Consulta de clientes</li>
+ *     <li>Atualização de dados</li>
+ * </ul>
+ *
+ * <p>Regras de segurança:
+ * <ul>
+ *     <li>GERENTE: acesso completo</li>
+ *     <li>CLIENTE: acesso apenas aos próprios dados</li>
+ * </ul>
+ * </p>
  *
  * @author Marcelo
  * @version 2.0
@@ -32,6 +43,8 @@ import java.net.URI;
 @Produces(MediaType.APPLICATION_JSON)
 public class CustomerResource {
 
+    private static final int MAX_PAGE_SIZE = 100;
+
     @Inject
     CustomerService customerService;
 
@@ -39,20 +52,22 @@ public class CustomerResource {
     CurrentUserService currentUserService;
 
     /**
-     * Lista todos os clientes cadastrados com paginação.
+     * Lista clientes com paginação.
      *
-     * <p>Endpoint público que retorna uma página de clientes
-     * ordenados por ID.</p>
+     * <p>Apenas gerentes podem acessar este endpoint.</p>
      *
-     * @param page Número da página (0-indexed). Padrão: 0
-     * @param size Quantidade de clientes por página. Padrão: 10
-     * @return página de clientes com dados públicos.
+     * @param page número da página (inicia em 0).
+     * @param size quantidade de registros por página.
+     * @return lista paginada de clientes.
      */
     @GET
     @RolesAllowed("GERENTE")
     public PageResponse<CustomerResponse> list(
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("10") int size) {
+
+        validatePagination(page, size);
+
         return PageResponse.from(
                 customerService.list(page, size),
                 this::toResponse
@@ -60,18 +75,22 @@ public class CustomerResource {
     }
 
     /**
-     * Busca um cliente pelo id.
+     * Busca um cliente pelo ID.
      *
-     * <p>Endpoint público que retorna os dados públicos
-     * de um cliente específico.</p>
+     * <p>Gerentes podem acessar qualquer cliente.
+     * Clientes só podem acessar a si mesmos.</p>
      *
      * @param id identificador do cliente.
-     * @return dados públicos do cliente encontrado.
+     * @return dados públicos do cliente.
      */
     @GET
     @Path("/{id}")
-    @RolesAllowed({"GERENTE","CLIENTE"})
+    @RolesAllowed({"GERENTE", "CLIENTE"})
     public CustomerResponse findById(@PathParam("id") Long id) {
+
+        if (id == null) {
+            throw new BadRequestException("O ID do cliente é obrigatório");
+        }
 
         validateOwnershipOrManager(id);
 
@@ -79,13 +98,12 @@ public class CustomerResource {
     }
 
     /**
-     * Cadastra um novo cliente (signup).
+     * Cria um novo cliente (cadastro).
      *
-     * <p>Endpoint público que permite o cadastro de novos clientes
-     * sem autenticação prévia.</p>
+     * <p>Endpoint público que não requer autenticação.</p>
      *
-     * @param request dados do cliente a ser criado.
-     * @param uriInfo informações da URI da requisição.
+     * @param request dados do cliente.
+     * @param uriInfo informações da URI.
      * @return resposta HTTP 201 com o cliente criado.
      */
     @POST
@@ -94,6 +112,7 @@ public class CustomerResource {
     public Response create(
             @Valid CreateCustomerRequest request,
             @Context UriInfo uriInfo) {
+
         Customer customer = customerService.create(toCustomer(request));
         CustomerResponse response = toResponse(customer);
 
@@ -107,15 +126,14 @@ public class CustomerResource {
     }
 
     /**
-     * Atualiza os dados permitidos de um cliente.
+     * Atualiza os dados de um cliente.
      *
-     * <p>Apenas o próprio cliente ou um gerente podem atualizar
-     * os dados de um cliente. O CPF não pode ser alterado.</p>
+     * <p>Gerentes podem atualizar qualquer cliente.
+     * Clientes só podem atualizar seus próprios dados.</p>
      *
-     * @param id identificador do cliente a atualizar.
-     * @param request novos dados do cliente.
-     * @return dados públicos do cliente atualizado.
-     * @throws ForbiddenException quando o usuário não tem permissão.
+     * @param id identificador do cliente.
+     * @param request novos dados.
+     * @return cliente atualizado.
      */
     @PUT
     @Path("/{id}")
@@ -125,7 +143,10 @@ public class CustomerResource {
             @PathParam("id") Long id,
             @Valid UpdateCustomerRequest request) {
 
-        // Validar propriedade: apenas o próprio cliente ou gerente pode atualizar
+        if (id == null) {
+            throw new BadRequestException("O ID do cliente é obrigatório");
+        }
+
         validateOwnershipOrManager(id);
 
         Customer updatedCustomer = customerService.update(
@@ -139,23 +160,17 @@ public class CustomerResource {
     }
 
     /**
-     * Valida se o usuário logado é o proprietário da conta ou é gerente.
+     * Valida se o usuário logado é o próprio cliente ou um gerente.
      *
-     * <p>Gerentes podem atualizar qualquer cliente.
-     * Clientes só podem atualizar a si mesmos.</p>
-     *
-     * @param customerId ID do cliente a ser atualizado.
-     * @throws ForbiddenException quando o usuário não tem permissão.
+     * @param customerId ID do cliente.
      */
     private void validateOwnershipOrManager(Long customerId) {
         LoggedUser currentUser = currentUserService.getLoggedUser();
 
-        // Gerente pode fazer qualquer coisa
         if (currentUser.isManager()) {
             return;
         }
 
-        // Cliente só pode atualizar a si mesmo
         if (!currentUser.id().equals(customerId)) {
             throw new ForbiddenException(
                     "Acesso negado: apenas o próprio cliente ou um gerente pode realizar esta operação"
@@ -164,10 +179,20 @@ public class CustomerResource {
     }
 
     /**
-     * Converte a entidade Customer em CustomerResponse.
-     *
-     * @param customer entidade de cliente.
-     * @return resposta com dados públicos do cliente.
+     * Valida parâmetros de paginação.
+     */
+    private void validatePagination(int page, int size) {
+        if (page < 0) {
+            throw new BadRequestException("page deve ser >= 0");
+        }
+
+        if (size <= 0 || size > MAX_PAGE_SIZE) {
+            throw new BadRequestException("size deve estar entre 1 e " + MAX_PAGE_SIZE);
+        }
+    }
+
+    /**
+     * Converte entidade Customer em DTO.
      */
     private CustomerResponse toResponse(Customer customer) {
         return new CustomerResponse(
@@ -178,10 +203,7 @@ public class CustomerResource {
     }
 
     /**
-     * Converte o request de criação em entidade Customer.
-     *
-     * @param request dados recebidos no cadastro.
-     * @return entidade Customer.
+     * Converte request em entidade Customer.
      */
     private Customer toCustomer(CreateCustomerRequest request) {
         return new Customer(

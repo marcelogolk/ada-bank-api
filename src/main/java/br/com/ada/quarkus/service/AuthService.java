@@ -99,8 +99,7 @@ public class AuthService implements CurrentUserService {
         return new TokenResponse(
                 token,
                 customer.getEmail(),
-                customer.getName(),
-                customer.getCpf()
+                customer.getName()
         );
     }
 

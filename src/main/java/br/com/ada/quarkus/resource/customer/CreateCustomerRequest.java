@@ -8,10 +8,13 @@ import jakarta.validation.constraints.Size;
 /**
  * Representa os dados necessários para o cadastro de um cliente.
  *
- * @param name nome do cliente.
- * @param cpf CPF do cliente.
- * @param email email do cliente.
- * @param password senha de acesso do cliente.
+ * <p>Utilizado no endpoint de criação (signup). Todos os campos são obrigatórios
+ * e validados antes de serem enviados para a camada de serviço.</p>
+ *
+ * @param name nome completo do cliente.
+ * @param cpf CPF do cliente contendo exatamente 11 dígitos numéricos (sem máscara).
+ * @param email email do cliente, deve estar em formato válido.
+ * @param password senha de acesso do cliente em texto puro.
  */
 public record CreateCustomerRequest(
 

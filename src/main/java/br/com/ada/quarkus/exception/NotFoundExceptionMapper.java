@@ -7,6 +7,11 @@ import jakarta.ws.rs.core.UriInfo;
 import jakarta.ws.rs.ext.ExceptionMapper;
 import jakarta.ws.rs.ext.Provider;
 
+/**
+ * Mapper responsável por tratar exceções de recurso não encontrado.
+ *
+ * <p>Retorna status HTTP 404 quando o recurso solicitado não existe.</p>
+ */
 @Provider
 public class NotFoundExceptionMapper
         implements ExceptionMapper<NotFoundException> {
@@ -19,7 +24,7 @@ public class NotFoundExceptionMapper
 
         ErrorResponse error = new ErrorResponse(
                 Response.Status.NOT_FOUND.getStatusCode(),
-                "Not Found",
+                Response.Status.NOT_FOUND.getReasonPhrase(),
                 exception.getMessage(),
                 uriInfo.getPath()
         );

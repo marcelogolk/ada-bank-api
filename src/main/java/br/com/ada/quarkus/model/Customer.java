@@ -9,12 +9,12 @@ import java.util.Objects;
 
 /**
  * Representa um cliente dentro do sistema bancário da ADA.
- * <p>
- * Esta classe é o modelo base para armazenamento de informações pessoais,
- * contendo validações específicas para conformidade com dados cadastrais.
- * Utiliza optimistic locking através da anotação @Version para garantir
- * consistência em operações concorrentes.
- * </p>
+ *
+ * <p>Esta classe armazena informações cadastrais do cliente e aplica validações
+ * de integridade para CPF, email, senha e papel de acesso.</p>
+ *
+ * <p>Utiliza optimistic locking através da anotação {@link Version} para reduzir
+ * conflitos em operações concorrentes.</p>
  *
  * @author Marcelo
  * @version 1.0
@@ -25,7 +25,7 @@ public class Customer extends PanacheEntityBase {
 
     /**
      * Identificador único do cliente no banco de dados.
-     * Gerado automaticamente pelo banco (auto-increment).
+     * Gerado automaticamente pelo banco.
      */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -33,8 +33,6 @@ public class Customer extends PanacheEntityBase {
 
     /**
      * Nome completo do cliente.
-     * Deve conter entre 3 e 100 caracteres alfabéticos.
-     * Campo obrigatório e mapeado para a coluna "name" do banco.
      */
     @NotBlank(message = "O nome do cliente é obrigatório")
     @Size(min = 3, max = 100, message = "O nome do cliente deve conter entre 3 e 100 caracteres")
@@ -42,9 +40,7 @@ public class Customer extends PanacheEntityBase {
     private String name;
 
     /**
-     * Cadastro de Pessoa Física (CPF) do cliente.
-     * Deve conter exatamente 11 dígitos numéricos, sem formatação.
-     * Campo obrigatório, único e mapeado para a coluna "cpf" do banco.
+     * CPF do cliente, armazenado com exatamente 11 dígitos numéricos e sem máscara.
      */
     @NotBlank(message = "O CPF é obrigatório")
     @Pattern(regexp = "\\d{11}", message = "O CPF deve conter exatamente 11 dígitos numéricos")
@@ -52,9 +48,8 @@ public class Customer extends PanacheEntityBase {
     private String cpf;
 
     /**
-     * Endereço de e-mail eletrônico do cliente.
-     * Utilizado para contato, notificações e autenticação.
-     * Campo obrigatório, único e validado como e-mail válido.
+     * Email do cliente.
+     * Utilizado para autenticação e comunicação.
      */
     @NotBlank(message = "O email é obrigatório")
     @Email(message = "O email informado é inválido")
@@ -62,9 +57,12 @@ public class Customer extends PanacheEntityBase {
     private String email;
 
     /**
-     * Senha para autenticação do cliente no sistema.
-     * Campo obrigatório com mínimo de 6 caracteres.
-     * Não é serializado em respostas JSON por segurança (@JsonIgnore).
+     * Hash da senha do cliente.
+     *
+     * <p>A senha em texto puro nunca deve ser persistida. O valor armazenado
+     * deve ser gerado pela camada de serviço usando Argon2.</p>
+     *
+     * <p>Este campo não é serializado em respostas JSON por segurança.</p>
      */
     @NotBlank(message = "A senha é obrigatória")
     @Size(min = 6, message = "A senha deve conter pelo menos 6 caracteres")
@@ -74,7 +72,7 @@ public class Customer extends PanacheEntityBase {
 
     /**
      * Papel/permissão do cliente no sistema.
-     * Valores: GERENTE ou CLIENTE.
+     * Valores persistidos: GERENTE ou CLIENTE.
      */
     @NotNull(message = "O papel do cliente é obrigatório")
     @Column(name = "role", nullable = false)
@@ -82,30 +80,28 @@ public class Customer extends PanacheEntityBase {
     private UserRole role;
 
     /**
-     * Versão do registro para controle de concorrência (optimistic locking).
-     * Incrementado automaticamente a cada atualização pelo Hibernate.
-     * Previne conflitos em operações concorrentes.
+     * Versão do registro para controle de concorrência.
      */
     @Version
     private Long version;
 
     /**
-     * Construtor padrão (sem argumentos).
-     * Necessário para frameworks de persistência (Hibernate/JPA) e serialização JSON (Jackson).
+     * Construtor padrão necessário para JPA/Hibernate.
      */
     public Customer() {
     }
 
     /**
      * Construtor para criação de cliente.
-     * Todo novo cliente criado por este fluxo nasce com papel CLIENTE.
-     * A versão é inicializada automaticamente pelo Hibernate.
      *
-     * @param id       o identificador único do cliente.
-     * @param name     o nome completo do cliente.
-     * @param cpf      o documento de identificação (CPF) com 11 dígitos.
-     * @param email    o endereço de e-mail eletrônico.
-     * @param password a senha para autenticação no sistema.
+     * <p>Todo novo cliente criado por este fluxo nasce com papel CUSTOMER,
+     * que é persistido como CLIENTE no banco.</p>
+     *
+     * @param id identificador único do cliente.
+     * @param name nome completo do cliente.
+     * @param cpf CPF com 11 dígitos.
+     * @param email endereço de email.
+     * @param password senha ou hash da senha, conforme fluxo de criação.
      */
     public Customer(Long id, String name, String cpf, String email, String password) {
         this.id = id;
@@ -116,89 +112,63 @@ public class Customer extends PanacheEntityBase {
         this.role = UserRole.CUSTOMER;
     }
 
-    // ========== Getters e Setters ==========
-
-    /** @return o identificador único do cliente. */
     public Long getId() {
         return id;
     }
 
-    /** @param id o novo identificador do cliente. */
     public void setId(Long id) {
         this.id = id;
     }
 
-    /** @return o nome completo do cliente. */
     public String getName() {
         return name;
     }
 
-    /** @param name o novo nome do cliente. */
     public void setName(String name) {
         this.name = name;
     }
 
-    /** @return o CPF do cliente (11 dígitos). */
     public String getCpf() {
         return cpf;
     }
 
-    /** @param cpf o novo CPF do cliente. */
     public void setCpf(String cpf) {
         this.cpf = cpf;
     }
 
-    /** @return o e-mail do cliente. */
     public String getEmail() {
         return email;
     }
 
-    /** @param email o novo e-mail do cliente. */
     public void setEmail(String email) {
         this.email = email;
     }
 
-    /** @return o papel/permissão do cliente no sistema. */
     public UserRole getRole() {
         return role;
     }
 
-    /** @param role o papel/permissão do cliente no sistema. */
     public void setRole(UserRole role) {
         this.role = role;
     }
 
-    /**
-     * Retorna a senha do cliente.
-     * <p>
-     * <strong>Nota de segurança:</strong> esta senha não é serializada em respostas JSON
-     * devido à anotação @JsonIgnore no atributo.
-     * </p>
-     *
-     * @return a senha de autenticação do cliente.
-     */
     public String getPassword() {
         return password;
     }
 
-    /** @param password a nova senha de autenticação. */
     public void setPassword(String password) {
         this.password = password;
     }
 
-    /** @return a versão atual do registro (optimistic locking). */
     public Long getVersion() {
         return version;
     }
-
-    // ========== Métodos Object ==========
 
     @Override
     public String toString() {
         return "Customer{" +
                 "id=" + id +
                 ", name='" + name + '\'' +
-                ", cpf='" + cpf + '\'' +
                 ", email='" + email + '\'' +
                 ", role=" + role +
                 ", version=" + version +

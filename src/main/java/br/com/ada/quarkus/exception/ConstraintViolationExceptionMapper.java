@@ -9,7 +9,11 @@ import jakarta.ws.rs.ext.ExceptionMapper;
 import jakarta.ws.rs.ext.Provider;
 
 import java.util.stream.Collectors;
-
+/**
+ * Mapper responsável por tratar exceções de validação de Bean Validation.
+ *
+ * <p>Consolida todas as mensagens de erro de validação em uma única string.</p>
+ */
 @Provider
 public class ConstraintViolationExceptionMapper
         implements ExceptionMapper<ConstraintViolationException> {
@@ -25,9 +29,13 @@ public class ConstraintViolationExceptionMapper
                 .map(ConstraintViolation::getMessage)
                 .collect(Collectors.joining("; "));
 
+        if (message.isBlank()) {
+            message = "Erro de validação";
+        }
+
         ErrorResponse error = new ErrorResponse(
                 Response.Status.BAD_REQUEST.getStatusCode(),
-                "Bad Request",
+                Response.Status.BAD_REQUEST.getReasonPhrase(),
                 message,
                 uriInfo.getPath()
         );
