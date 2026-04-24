@@ -3,6 +3,7 @@ package br.com.ada.quarkus.service;
 import br.com.ada.quarkus.model.Customer;
 import br.com.ada.quarkus.model.LoggedUser;
 import br.com.ada.quarkus.model.PageResult;
+import br.com.ada.quarkus.model.UserRole;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -16,6 +17,9 @@ import jakarta.ws.rs.NotFoundException;
  * <p>Centraliza as regras de negócio relacionadas a cadastro, consulta
  * e atualização de clientes, com persistência em banco de dados PostgreSQL.</p>
  *
+ * <p>As senhas são protegidas com hash Argon2 no momento da criação
+ * e da atualização de clientes.</p>
+ *
  * @author Marcelo
  * @version 2.0
  */
@@ -25,11 +29,14 @@ public class CustomerService {
     @Inject
     CurrentUserService currentUserService;
 
+    @Inject
+    PasswordService passwordService;
+
     /**
      * Lista todos os clientes cadastrados com paginação, ordenados por id.
      *
-     * @param page Número da página (0-indexed).
-     * @param size Quantidade de clientes por página.
+     * @param page número da página (0-indexed).
+     * @param size quantidade de clientes por página.
      * @return resultado paginado de clientes.
      */
     public PageResult<Customer> list(int page, int size) {
@@ -60,22 +67,18 @@ public class CustomerService {
     public Customer findByEmail(String email) {
         String normalizedEmail = normalizeEmail(email);
 
-        return (Customer) Customer.find("email", normalizedEmail).firstResultOptional()
+        return (Customer) Customer.find("email", normalizedEmail)
+                .firstResultOptional()
                 .orElseThrow(() -> new NotFoundException(
                         "Cliente com o email informado não foi encontrado"
                 ));
     }
-//    public Customer findByEmail(String email) {
-//        String normalizedEmail = normalizeEmail(email);
-//
-//        return (Customer) Customer.find("email = ?1", normalizedEmail).firstResultOptional()
-//                .orElseThrow(() -> new NotFoundException(
-//                        "Cliente com o email informado não foi encontrado"
-//                ));
-//    }
 
     /**
      * Cadastra um novo cliente após validar unicidade de CPF e email.
+     *
+     * <p>Todo cliente criado por este fluxo nasce com papel CLIENTE
+     * e senha protegida com hash Argon2.</p>
      *
      * @param customer dados do cliente a ser criado.
      * @return cliente criado e persistido no banco.
@@ -89,7 +92,8 @@ public class CustomerService {
         newCustomer.setName(customer.getName());
         newCustomer.setCpf(customer.getCpf());
         newCustomer.setEmail(normalizeEmail(customer.getEmail()));
-        newCustomer.setPassword(customer.getPassword());
+        newCustomer.setPassword(passwordService.hash(customer.getPassword()));
+        newCustomer.setRole(UserRole.CUSTOMER);
 
         newCustomer.persist();
 
@@ -99,7 +103,8 @@ public class CustomerService {
     /**
      * Atualiza os dados permitidos de um cliente.
      *
-     * <p>O CPF não pode ser alterado após o cadastro.</p>
+     * <p>O CPF não pode ser alterado após o cadastro.
+     * A senha é persistida com hash Argon2.</p>
      *
      * @param id identificador do cliente.
      * @param name novo nome.
@@ -116,7 +121,7 @@ public class CustomerService {
 
         existingCustomer.setName(name);
         existingCustomer.setEmail(normalizeEmail(email));
-        existingCustomer.setPassword(password);
+        existingCustomer.setPassword(passwordService.hash(password));
 
         return existingCustomer;
     }

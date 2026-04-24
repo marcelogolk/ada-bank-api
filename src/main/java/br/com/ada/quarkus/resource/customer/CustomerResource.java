@@ -158,7 +158,7 @@ public class CustomerResource {
         // Cliente só pode atualizar a si mesmo
         if (!currentUser.id().equals(customerId)) {
             throw new ForbiddenException(
-                    "Acesso negado: apenas o proprietário da conta ou um gerente pode realizar esta operação"
+                    "Acesso negado: apenas o próprio cliente ou um gerente pode realizar esta operação"
             );
         }
     }

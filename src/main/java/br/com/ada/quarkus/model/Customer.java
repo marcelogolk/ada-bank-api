@@ -1,9 +1,10 @@
 package br.com.ada.quarkus.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
-import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import java.util.Objects;
 
 /**
@@ -11,7 +12,7 @@ import java.util.Objects;
  * <p>
  * Esta classe é o modelo base para armazenamento de informações pessoais,
  * contendo validações específicas para conformidade com dados cadastrais.
- * Utiliza otimistic locking através da anotação @Version para garantir
+ * Utiliza optimistic locking através da anotação @Version para garantir
  * consistência em operações concorrentes.
  * </p>
  *
@@ -72,21 +73,19 @@ public class Customer extends PanacheEntityBase {
     private String password;
 
     /**
-     * Versão do registro para controle de concorrência (Optimistic Locking).
-     * Incrementado automaticamente a cada atualização pelo Hibernate.
-     * Previne conflitos em operações concorrentes.
-     */
-
-    /**
      * Papel/permissão do cliente no sistema.
      * Valores: GERENTE ou CLIENTE.
      */
     @NotNull(message = "O papel do cliente é obrigatório")
-    //@Enumerated(EnumType.STRING)
     @Column(name = "role", nullable = false)
     @Convert(converter = UserRoleConverter.class)
     private UserRole role;
 
+    /**
+     * Versão do registro para controle de concorrência (optimistic locking).
+     * Incrementado automaticamente a cada atualização pelo Hibernate.
+     * Previne conflitos em operações concorrentes.
+     */
     @Version
     private Long version;
 
@@ -98,14 +97,15 @@ public class Customer extends PanacheEntityBase {
     }
 
     /**
-     * Construtor completo para inicialização de todos os campos principais.
+     * Construtor para criação de cliente.
+     * Todo novo cliente criado por este fluxo nasce com papel CLIENTE.
      * A versão é inicializada automaticamente pelo Hibernate.
      *
-     * @param id       O identificador único do cliente.
-     * @param name     O nome completo do cliente.
-     * @param cpf      O documento de identificação (CPF) com 11 dígitos.
-     * @param email    O endereço de e-mail eletrônico.
-     * @param password A senha para autenticação no sistema.
+     * @param id       o identificador único do cliente.
+     * @param name     o nome completo do cliente.
+     * @param cpf      o documento de identificação (CPF) com 11 dígitos.
+     * @param email    o endereço de e-mail eletrônico.
+     * @param password a senha para autenticação no sistema.
      */
     public Customer(Long id, String name, String cpf, String email, String password) {
         this.id = id;
@@ -113,54 +113,57 @@ public class Customer extends PanacheEntityBase {
         this.cpf = cpf;
         this.email = email;
         this.password = password;
+        this.role = UserRole.CUSTOMER;
     }
 
     // ========== Getters e Setters ==========
 
-    /** @return O identificador único do cliente. */
+    /** @return o identificador único do cliente. */
     public Long getId() {
         return id;
     }
 
-    /** @param id O novo identificador do cliente. */
+    /** @param id o novo identificador do cliente. */
     public void setId(Long id) {
         this.id = id;
     }
 
-    /** @return O nome completo do cliente. */
+    /** @return o nome completo do cliente. */
     public String getName() {
         return name;
     }
 
-    /** @param name O novo nome do cliente. */
+    /** @param name o novo nome do cliente. */
     public void setName(String name) {
         this.name = name;
     }
 
-    /** @return O CPF do cliente (11 dígitos). */
+    /** @return o CPF do cliente (11 dígitos). */
     public String getCpf() {
         return cpf;
     }
 
-    /** @param cpf O novo CPF do cliente. */
+    /** @param cpf o novo CPF do cliente. */
     public void setCpf(String cpf) {
         this.cpf = cpf;
     }
 
-    /** @return O e-mail do cliente. */
+    /** @return o e-mail do cliente. */
     public String getEmail() {
         return email;
     }
 
-    /** @param email O novo e-mail do cliente. */
+    /** @param email o novo e-mail do cliente. */
     public void setEmail(String email) {
         this.email = email;
     }
-    /** @return  Papel/permissão do cliente no sistema */
+
+    /** @return o papel/permissão do cliente no sistema. */
     public UserRole getRole() {
         return role;
     }
-    /** @param role Papel/permissão do cliente no sistema. */
+
+    /** @param role o papel/permissão do cliente no sistema. */
     public void setRole(UserRole role) {
         this.role = role;
     }
@@ -168,22 +171,22 @@ public class Customer extends PanacheEntityBase {
     /**
      * Retorna a senha do cliente.
      * <p>
-     * <strong>Nota de Segurança:</strong> Esta senha NÃO é serializada em respostas JSON
+     * <strong>Nota de segurança:</strong> esta senha não é serializada em respostas JSON
      * devido à anotação @JsonIgnore no atributo.
      * </p>
      *
-     * @return A senha de autenticação do cliente.
+     * @return a senha de autenticação do cliente.
      */
     public String getPassword() {
         return password;
     }
 
-    /** @param password A nova senha de autenticação. */
+    /** @param password a nova senha de autenticação. */
     public void setPassword(String password) {
         this.password = password;
     }
 
-    /** @return A versão atual do registro (Optimistic Locking). */
+    /** @return a versão atual do registro (optimistic locking). */
     public Long getVersion() {
         return version;
     }
@@ -197,6 +200,7 @@ public class Customer extends PanacheEntityBase {
                 ", name='" + name + '\'' +
                 ", cpf='" + cpf + '\'' +
                 ", email='" + email + '\'' +
+                ", role=" + role +
                 ", version=" + version +
                 '}';
     }
@@ -205,6 +209,7 @@ public class Customer extends PanacheEntityBase {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
+
         Customer customer = (Customer) o;
         return Objects.equals(id, customer.id) &&
                 Objects.equals(cpf, customer.cpf);

@@ -3,7 +3,6 @@ package br.com.ada.quarkus.resource.transaction;
 import br.com.ada.quarkus.model.LoggedUser;
 import br.com.ada.quarkus.model.Transaction;
 import br.com.ada.quarkus.resource.PageResponse;
-import br.com.ada.quarkus.resource.account.AccountResponse;
 import br.com.ada.quarkus.service.AccountService;
 import br.com.ada.quarkus.service.CurrentUserService;
 import br.com.ada.quarkus.service.TransactionService;
@@ -35,6 +34,9 @@ public class TransactionResource {
     @Inject
     CurrentUserService currentUserService;
 
+    @Inject
+    TransactionResponseMapper transactionResponseMapper;
+
     /**
      * Busca uma transação pelo identificador.
      *
@@ -49,7 +51,7 @@ public class TransactionResource {
     public TransactionResponse findById(@PathParam("id") Long id) {
         Transaction transaction = transactionService.findById(id);
         validateTransactionAccess(transaction);
-        return toResponse(transaction);
+        return transactionResponseMapper.toResponse(transaction);
     }
 
     /**
@@ -65,7 +67,7 @@ public class TransactionResource {
     @GET
     @RolesAllowed({"GERENTE", "CLIENTE"})
     public PageResponse<TransactionResponse> listByAccountId(
-            @QueryParam("contaId") Long accountId,
+            @QueryParam("accountId") Long accountId,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("10") int size) {
 
@@ -73,7 +75,7 @@ public class TransactionResource {
 
         return PageResponse.from(
                 transactionService.listByAccountId(accountId, page, size),
-                this::toResponse
+                transactionResponseMapper::toResponse
         );
     }
 
@@ -91,7 +93,7 @@ public class TransactionResource {
     @Path("/hoje")
     @RolesAllowed({"GERENTE", "CLIENTE"})
     public PageResponse<TransactionResponse> listTodayByAccountId(
-            @QueryParam("contaId") Long accountId,
+            @QueryParam("accountId") Long accountId,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("10") int size) {
 
@@ -99,7 +101,7 @@ public class TransactionResource {
 
         return PageResponse.from(
                 transactionService.listTodayByAccountId(accountId, page, size),
-                this::toResponse
+                transactionResponseMapper::toResponse
         );
     }
 
@@ -115,12 +117,10 @@ public class TransactionResource {
     private void validateTransactionAccess(Transaction transaction) {
         LoggedUser currentUser = currentUserService.getLoggedUser();
 
-        // Gerente pode fazer qualquer coisa
         if (currentUser.isManager()) {
             return;
         }
 
-        // Cliente só pode acessar transações de suas próprias contas
         Long sourceAccountId = transaction.getSourceAccountId();
         Long destinationAccountId = transaction.getDestinationAccountId();
 
@@ -159,64 +159,15 @@ public class TransactionResource {
     private void validateAccountAccess(Long accountId) {
         LoggedUser currentUser = currentUserService.getLoggedUser();
 
-        // Gerente pode fazer qualquer coisa
         if (currentUser.isManager()) {
             return;
         }
 
-        // Cliente só pode acessar sua própria conta
         Long customerId = accountService.findById(accountId).getCustomerId();
         if (!currentUser.id().equals(customerId)) {
             throw new ForbiddenException(
                     "Acesso negado: você não tem permissão para visualizar o histórico desta conta"
             );
         }
-    }
-
-    /**
-     * Converte a entidade Transaction em TransactionResponse.
-     *
-     * @param transaction entidade de transação.
-     * @return resposta com dados completos da transação.
-     */
-    private TransactionResponse toResponse(Transaction transaction) {
-        AccountResponse sourceAccount = null;
-        AccountResponse destinationAccount = null;
-
-        if (transaction.getSourceAccountId() != null) {
-            sourceAccount = toAccountResponse(
-                    accountService.findById(transaction.getSourceAccountId())
-            );
-        }
-
-        if (transaction.getDestinationAccountId() != null) {
-            destinationAccount = toAccountResponse(
-                    accountService.findById(transaction.getDestinationAccountId())
-            );
-        }
-
-        return new TransactionResponse(
-                transaction.getId(),
-                transaction.getType(),
-                transaction.getAmount(),
-                transaction.getDateTime(),
-                sourceAccount,
-                destinationAccount
-        );
-    }
-
-    /**
-     * Converte a entidade Account em AccountResponse simplificado.
-     *
-     * @param account entidade de conta.
-     * @return resposta com dados da conta.
-     */
-    private AccountResponse toAccountResponse(br.com.ada.quarkus.model.Account account) {
-        return new AccountResponse(
-                account.getId(),
-                account.getAccountNumber(),
-                account.getType(),
-                account.getBalance()
-        );
     }
 }

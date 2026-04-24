@@ -3,11 +3,13 @@ package br.com.ada.quarkus.resource.account;
 import br.com.ada.quarkus.model.Account;
 import br.com.ada.quarkus.model.LoggedUser;
 import br.com.ada.quarkus.model.Transaction;
-import br.com.ada.quarkus.resource.PageResponse;
+import br.com.ada.quarkus.resource.transaction.TransactionResponse;
+import br.com.ada.quarkus.resource.transaction.TransactionResponseMapper;
 import br.com.ada.quarkus.service.AccountService;
 import br.com.ada.quarkus.service.CurrentUserService;
 import br.com.ada.quarkus.service.CustomerService;
 import br.com.ada.quarkus.service.TransactionService;
+import br.com.ada.quarkus.util.OutputMaskFormatter;
 import jakarta.annotation.security.PermitAll;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
@@ -18,11 +20,8 @@ import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
-import br.com.ada.quarkus.util.OutputMaskFormatter;
 
-import java.math.BigDecimal;
 import java.net.URI;
-import br.com.ada.quarkus.resource.transaction.TransactionResponse;
 
 /**
  * Recurso responsável pelos endpoints de contas bancárias.
@@ -50,6 +49,9 @@ public class AccountResource {
     @Inject
     TransactionService transactionService;
 
+    @Inject
+    TransactionResponseMapper transactionResponseMapper;
+
     /**
      * Cria uma nova conta bancária para um cliente.
      *
@@ -63,6 +65,7 @@ public class AccountResource {
     @POST
     @Transactional
     @RolesAllowed("GERENTE")
+
     public Response create(
             @Valid CreateAccountRequest request,
             @Context UriInfo uriInfo) {
@@ -90,33 +93,31 @@ public class AccountResource {
     @Path("/{id}")
     @RolesAllowed({"GERENTE", "CLIENTE"})
     public AccountDetailsResponse findById(@PathParam("id") Long id) {
-        //busca conta
         Account account = accountService.findById(id);
-        // valida proprietário da conta
         validateAccountOwnership(account);
-        // busca titular
+
         var customer = customerService.findById(account.getCustomerId());
-        // monta titular
+
         CustomerSummaryResponse holder =
                 new CustomerSummaryResponse(
                         customer.getId(),
                         customer.getName(),
                         customer.getEmail()
                 );
-        // busca transaçoes do dia
+
         var todayTransactions =
                 transactionService
                         .listTodayByAccountId(id, 0, 10)
                         .content()
                         .stream()
-                        .map(this::toDetailedTransactionResponse)
+                        .map(transactionResponseMapper::toResponse)
                         .toList();
-        // monta links
+
         AccountLinksResponse links =
                 new AccountLinksResponse(
-                        "/transacoes?contaId=" + id
+                        "/transacoes?accountId=" + id
                 );
-        //   retorna resposta completa
+
         return new AccountDetailsResponse(
                 account.getId(),
                 OutputMaskFormatter.formatAccountNumber(
@@ -133,9 +134,12 @@ public class AccountResource {
     /**
      * Realiza um depósito em uma conta.
      *
-     * <p>Endpoint público. Contas do tipo ELETRONICA não permitem depósitos.</p>
+     * <p>Endpoint público, conforme regra de negócio.</p>
      *
-     * @param id      identificador da conta receptora.
+     * <p>A validação da existência da conta, do valor informado
+     * e das restrições de tipo de conta é realizada na camada de serviço.</p>
+     *
+     * @param id identificador da conta receptora.
      * @param request dados do depósito.
      * @return dados da transação realizada.
      */
@@ -147,7 +151,7 @@ public class AccountResource {
             @PathParam("id") Long id,
             @Valid DepositRequest request) {
         Transaction transaction = accountService.deposit(id, request.amount());
-        return toDetailedTransactionResponse(transaction);
+        return transactionResponseMapper.toResponse(transaction);
     }
 
     /**
@@ -156,7 +160,7 @@ public class AccountResource {
      * <p>Apenas o proprietário ou um gerente podem sacar. Contas do tipo
      * ELETRONICA não permitem saques. Valida saldo suficiente.</p>
      *
-     * @param id      identificador da conta de origem.
+     * @param id identificador da conta de origem.
      * @param request dados do saque.
      * @return dados da transação realizada.
      */
@@ -171,7 +175,7 @@ public class AccountResource {
         validateAccountOwnership(account);
 
         Transaction transaction = accountService.withdraw(id, request.amount());
-        return toDetailedTransactionResponse(transaction);
+        return transactionResponseMapper.toResponse(transaction);
     }
 
     /**
@@ -180,7 +184,7 @@ public class AccountResource {
      * <p>Apenas o proprietário da conta de origem ou um gerente podem transferir.
      * Valida saldo suficiente e que as contas são diferentes.</p>
      *
-     * @param id      identificador da conta de origem.
+     * @param id identificador da conta de origem.
      * @param request dados da transferência.
      * @return dados da transação realizada.
      */
@@ -199,7 +203,7 @@ public class AccountResource {
                 request.destinationAccountId(),
                 request.amount()
         );
-        return toDetailedTransactionResponse(transaction);
+        return transactionResponseMapper.toResponse(transaction);
     }
 
     /**
@@ -214,12 +218,10 @@ public class AccountResource {
     private void validateAccountOwnership(Account account) {
         LoggedUser currentUser = currentUserService.getLoggedUser();
 
-        // Gerente pode fazer qualquer coisa
         if (currentUser.isManager()) {
             return;
         }
 
-        // Cliente só pode acessar sua própria conta
         if (!currentUser.id().equals(account.getCustomerId())) {
             throw new ForbiddenException(
                     "Acesso negado: apenas o proprietário da conta ou um gerente pode realizar esta operação"
@@ -248,37 +250,5 @@ public class AccountResource {
         account.setType(request.type());
         account.setCustomerId(request.customerId());
         return account;
-    }
-
-    /**
-     * Converte a entidade Transaction em TransactionResponse.
-     *
-     * @param transaction entidade de transação.
-     * @return resposta com dados da transação.
-     */
-    private TransactionResponse toDetailedTransactionResponse(Transaction transaction) {
-        AccountResponse sourceAccount = null;
-        AccountResponse destinationAccount = null;
-
-        if (transaction.getSourceAccountId() != null) {
-            sourceAccount = AccountResponse.fromEntity(
-                    accountService.findById(transaction.getSourceAccountId())
-            );
-        }
-
-        if (transaction.getDestinationAccountId() != null) {
-            destinationAccount = AccountResponse.fromEntity(
-                    accountService.findById(transaction.getDestinationAccountId())
-            );
-        }
-
-        return new TransactionResponse(
-                transaction.getId(),
-                transaction.getType(),
-                transaction.getAmount(),
-                transaction.getDateTime(),
-                sourceAccount,
-                destinationAccount
-        );
     }
 }

@@ -49,6 +49,10 @@ public class AccountService {
     private void checkAccountOwnership(Account account) {
         LoggedUser currentUser = loggedUser();
 
+        if (currentUser.isManager()) {
+            return;
+        }
+
         if (currentUser.id().equals(account.getCustomerId())) {
             return;
         }

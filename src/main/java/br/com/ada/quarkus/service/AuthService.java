@@ -3,10 +3,7 @@ package br.com.ada.quarkus.service;
 import br.com.ada.quarkus.model.Customer;
 import br.com.ada.quarkus.model.LoggedUser;
 import br.com.ada.quarkus.resource.auth.TokenResponse;
-import de.mkammerer.argon2.Argon2;
-import de.mkammerer.argon2.Argon2Factory;
 import io.smallrye.jwt.build.Jwt;
-import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.NotAuthorizedException;
@@ -35,18 +32,10 @@ public class AuthService implements CurrentUserService {
     CustomerService customerService;
 
     @Inject
+    PasswordService passwordService;
+
+    @Inject
     JsonWebToken jwt;
-
-    private Argon2 argon2;
-
-    /**
-     * Inicializa o Argon2 para hash de senhas.
-     * Executado uma única vez após a construção da classe.
-     */
-    @PostConstruct
-    void init() {
-        argon2 = Argon2Factory.create(Argon2Factory.Argon2Types.ARGON2id);
-    }
 
     /**
      * Retorna o usuário logado extraindo informações do token JWT.
@@ -62,9 +51,9 @@ public class AuthService implements CurrentUserService {
 
         return new LoggedUser(
                 getUserId(),
-                jwt.getName(),              // ← email (upn)
-                jwt.getClaim("cpf"),        // ← cpf
-                getRole()                   // ← role (groups)
+                jwt.getName(),
+                jwt.getClaim("cpf"),
+                getRole()
         );
     }
 
@@ -118,7 +107,7 @@ public class AuthService implements CurrentUserService {
     /**
      * Valida se a senha informada corresponde à senha do cliente.
      *
-     * <p>Utiliza Argon2 para verificação segura da senha com hash.</p>
+     * <p>Utiliza o {@link PasswordService} para verificação segura com Argon2.</p>
      *
      * @param customer cliente encontrado.
      * @param password senha informada.
@@ -126,7 +115,7 @@ public class AuthService implements CurrentUserService {
      */
     private void validatePassword(Customer customer, String password) {
         boolean isValid = customer != null
-                && argon2.verify(customer.getPassword(), password.toCharArray());
+                && passwordService.verify(customer.getPassword(), password);
 
         if (!isValid) {
             throw new NotAuthorizedException("Credenciais inválidas");
@@ -143,8 +132,8 @@ public class AuthService implements CurrentUserService {
      */
     private String generateToken(Customer customer) {
         return Jwt.issuer(issuer)
-                .upn(customer.getEmail())                    // ← email como upn
-                .groups(customer.getRole().getValue())       // ← role como groups
+                .upn(customer.getEmail())
+                .groups(customer.getRole().getValue())
                 .claim("userId", customer.getId())
                 .claim("cpf", customer.getCpf())
                 .expiresIn(Duration.ofMinutes(30))
