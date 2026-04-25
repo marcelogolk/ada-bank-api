@@ -1,11 +1,11 @@
 package br.com.ada.quarkus.exception;
 
 import jakarta.ws.rs.BadRequestException;
+import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.UriInfo;
 import jakarta.ws.rs.ext.ExceptionMapper;
 import jakarta.ws.rs.ext.Provider;
-import jakarta.ws.rs.core.Context;
-import jakarta.ws.rs.core.UriInfo;
 
 /**
  * Mapper responsável por tratar exceções do tipo {@link BadRequestException}.
@@ -13,7 +13,7 @@ import jakarta.ws.rs.core.UriInfo;
  * <p>Retorna uma resposta padronizada com status HTTP 400 e detalhes do erro.</p>
  */
 @Provider
-public class BadRequestExceptionMapper<ErrorResponse>
+public class BadRequestExceptionMapper
         implements ExceptionMapper<BadRequestException> {
 
     @Context
@@ -21,7 +21,6 @@ public class BadRequestExceptionMapper<ErrorResponse>
 
     @Override
     public Response toResponse(BadRequestException exception) {
-
         ErrorResponse error = new ErrorResponse(
                 Response.Status.BAD_REQUEST.getStatusCode(),
                 Response.Status.BAD_REQUEST.getReasonPhrase(),
