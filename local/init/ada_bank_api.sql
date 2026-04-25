@@ -4,8 +4,6 @@
 -- ============================================================
 -- Senhas: todos os usuários têm a senha  ->  senha123
 -- ============================================================
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
 DROP VIEW IF EXISTS view_saldo CASCADE;
 
 DROP TABLE IF EXISTS bank_transaction CASCADE;
@@ -79,15 +77,15 @@ CREATE INDEX IF NOT EXISTS idx_trans_type       	ON bank_transaction 	(type);
 INSERT INTO customer (name, cpf, email, password, role)
 VALUES
     ('Alice Silva', '00000000001', 'alice.silva@bancada.com.br', '$argon2id$v=19$m=65536,t=3,p=4$wwnDzatVCvv+lTpxtmKuAA$heZ3gWTqRNLKf6qJEJ4yPBtZ8cKBIqJ5HPPLjmYPN70', 'GERENTE'),
-    ('Bob Santos', '00000000002', 'bob.santos@bancada.com.br', '$argon2id$v=19$m=65536,t=3,p=1$YWJjMTIzNDU2$0rZ9yqYpY7yUQqkYkqJ9YqJ8l1YQkYqZq8xYqZyYkqA', 'GERENTE'),
+    ('Bob Santos', '00000000002', 'bob.santos@bancada.com.br', '$argon2id$v=19$m=65536,t=3,p=4$wwnDzatVCvv+lTpxtmKuAA$heZ3gWTqRNLKf6qJEJ4yPBtZ8cKBIqJ5HPPLjmYPN70', 'GERENTE'),
     ('Carlos Oliveira', '00000000003', 'carlos.oliveira@bancada.com.br', '$argon2id$v=19$m=65536,t=3,p=4$UqyaNjY5pF/M0QoMjp+D7Q$wbbDMbxoG3Q4yV2aSCjtEiAyI1UYeISP0ALHzTQbU4o', 'CLIENTE'),
     ('Diana Souza', '00000000004', 'diana.souza@bancada.com.br', '$argon2id$v=19$m=65536,t=3,p=4$wwnDzatVCvv+lTpxtmKuAA$heZ3gWTqRNLKf6qJEJ4yPBtZ8cKBIqJ5HPPLjmYPN70', 'CLIENTE'),
-    ('Eduardo Ferreira', '00000000005', 'eduardo.ferreira@bancada.com.br', '$argon2id$v=19$m=65536,t=3,p=1$YWJjMTIzNDU2$0rZ9yqYpY7yUQqkYkqJ9YqJ8l1YQkYqZq8xYqZyYkqA', 'CLIENTE'),
-    ('Fernanda Lima', '00000000006', 'fernanda.lima@bancada.com.br', '$argon2id$v=19$m=65536,t=3,p=1$ZGVmNzg5MDEy$yX7kQqZ8l2YQpYqZk8YqJ7l2YQkYqZq8xYqZyYkqB', 'CLIENTE'),
-    ('Gabriel Gomes', '00000000007', 'gabriel.gomes@bancada.com.br', '$argon2id$v=19$m=65536,t=3,p=1$YWJjMTIzNDU2$0rZ9yqYpY7yUQqkYkqJ9YqJ8l1YQkYqZq8xYqZyYkqA', 'CLIENTE'),
+    ('Eduardo Ferreira', '00000000005', 'eduardo.ferreira@bancada.com.br', '$argon2id$v=19$m=65536,t=3,p=4$wwnDzatVCvv+lTpxtmKuAA$heZ3gWTqRNLKf6qJEJ4yPBtZ8cKBIqJ5HPPLjmYPN70', 'CLIENTE'),
+    ('Fernanda Lima', '00000000006', 'fernanda.lima@bancada.com.br', '$argon2id$v=19$m=65536,t=3,p=4$UqyaNjY5pF/M0QoMjp+D7Q$wbbDMbxoG3Q4yV2aSCjtEiAyI1UYeISP0ALHzTQbU4o', 'CLIENTE'),
+    ('Gabriel Gomes', '00000000007', 'gabriel.gomes@bancada.com.br', '$argon2id$v=19$m=65536,t=3,p=4$wwnDzatVCvv+lTpxtmKuAA$heZ3gWTqRNLKf6qJEJ4yPBtZ8cKBIqJ5HPPLjmYPN70', 'CLIENTE'),
     ('Helena Costa', '00000000008', 'helena.costa@bancada.com.br','$argon2id$v=19$m=65536,t=3,p=4$wwnDzatVCvv+lTpxtmKuAA$heZ3gWTqRNLKf6qJEJ4yPBtZ8cKBIqJ5HPPLjmYPN70', 'CLIENTE'),
-    ('Igor Ribeiro', '00000000009', 'igor.ribeiro@bancada.com.br', '$argon2id$v=19$m=65536,t=3,p=1$YWJjMTIzNDU2$0rZ9yqYpY7yUQqkYkqJ9YqJ8l1YQkYqZq8xYqZyYkqA', 'CLIENTE'),
-    ('Juliana Martins', '00000000010', 'juliana.martins@bancada.com.br', '$argon2id$v=19$m=65536,t=3,p=1$ZGVmNzg5MDEy$yX7kQqZ8l2YQpYqZk8YqJ7l2YQkYqZq8xYqZyYkqB', 'CLIENTE');
+    ('Igor Ribeiro', '00000000009', 'igor.ribeiro@bancada.com.br', '$argon2id$v=19$m=65536,t=3,p=4$wwnDzatVCvv+lTpxtmKuAA$heZ3gWTqRNLKf6qJEJ4yPBtZ8cKBIqJ5HPPLjmYPN70', 'CLIENTE'),
+    ('Juliana Martins', '00000000010', 'juliana.martins@bancada.com.br', '$argon2id$v=19$m=65536,t=3,p=4$wwnDzatVCvv+lTpxtmKuAA$heZ3gWTqRNLKf6qJEJ4yPBtZ8cKBIqJ5HPPLjmYPN70', 'CLIENTE');
 
 INSERT INTO account (account_number, type, customer_id)
 VALUES

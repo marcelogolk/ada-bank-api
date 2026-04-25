@@ -1,5 +1,7 @@
 package br.com.ada.quarkus.resource.customer;
 
+import br.com.ada.quarkus.model.UserRole;
+
 /**
  * Representa os dados públicos de um cliente retornados pela API.
  *
@@ -13,5 +15,6 @@ public record CustomerResponse(
         Long id,
         String name,
         String email
-) {
+    ){
+
 }
